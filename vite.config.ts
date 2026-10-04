@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/Sift/', // GitHub Pages project site: https://celeritas7.github.io/Sift/
   plugins: [
     react(),
     VitePWA({
@@ -15,7 +16,8 @@ export default defineConfig({
         theme_color: '#F4F0E8',
         background_color: '#F4F0E8',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/Sift/',
+        scope: '/Sift/',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: 'icon-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },

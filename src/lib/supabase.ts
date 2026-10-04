@@ -8,5 +8,5 @@ export const supabase: SupabaseClient | null = url && key ? createClient(url, ke
 export const cloud = !!supabase;
 export const LOCAL_USER = 'local';
 
-export const signInWithGoogle = () => supabase?.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+export const signInWithGoogle = () => supabase?.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + import.meta.env.BASE_URL } });
 export const signOut = () => supabase?.auth.signOut();
