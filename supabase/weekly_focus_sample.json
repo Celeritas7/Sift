@@ -1,0 +1,41 @@
+{
+  "_note": "Weekly Focus sample, shape-accurate, values illustrative. One board = rows of weekly_focus_entries (board_id, item_key, payload). There are no per-week rows: the board rolls forward, and meta.weekOf names the current week.",
+  "board_id": "my_week",
+  "rows": [
+    {
+      "item_key": "__board",
+      "payload": {
+        "u": 1791040000000,
+        "targetOrder": ["app:roadmap", "study:maths", "office:q4-report"],
+        "meta": {
+          "weekOf": "2026-09-28",
+          "eowDone": "Shipped banner; maths ch.3",
+          "eowCarry": "Q4 report draft",
+          "eowNotes": "",
+          "seq": ["app:roadmap", "office:q4-report"],
+          "hours": { "p": ["18:00", "23:00"], "o": ["09:00", "18:00"] },
+          "routines": [{ "id": "r1", "name": "Stretch", "days": [1, 2, 3, 4, 5], "mode": "p", "links": [] }]
+        }
+      }
+    },
+    {
+      "item_key": "app:roadmap",
+      "payload": {
+        "active": true, "pri": 1, "objective": "Connect WF tasks to Roadmap", "notes": "", "targetDone": false, "ord": 0,
+        "subtasks": [
+          { "id": "s_k3f9", "t": "Publish task.upsert", "done": true, "u": 1791039000000, "del": false, "when": "2026-10-04", "md": "b", "urg": false, "dl": false, "loc": "", "tag": "ca", "ctx": ["@needs-claude-code"], "lat": false, "latAt": 0, "rv": "", "src": null },
+          { "id": "s_p71a", "t": "Move banner above tab bar", "done": false, "u": 1791040100000, "del": false, "when": "2026-10-05", "md": "p", "urg": true, "dl": true, "loc": "", "tag": "", "ctx": ["@deep-work", "@keyboard"], "lat": false, "latAt": 0, "rv": "", "src": null }
+        ]
+      }
+    },
+    {
+      "item_key": "study:maths",
+      "payload": {
+        "active": true, "pri": 2, "objective": "Cover every subject folder", "notes": "", "targetDone": false, "ord": 1,
+        "subtasks": [
+          { "id": "s_m02c", "t": "Split maths folders into subjects", "done": false, "u": 1791030000000, "del": false, "when": "", "md": "p", "urg": false, "dl": false, "loc": "", "tag": "", "ctx": ["@train", "@phone-only"], "lat": true, "latAt": 1791030000000, "rv": "2026-10-10", "src": null }
+        ]
+      }
+    }
+  ]
+}

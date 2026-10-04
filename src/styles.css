@@ -1,0 +1,35 @@
+@import '@fontsource-variable/newsreader/opsz.css';
+@import '@fontsource-variable/newsreader/opsz-italic.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/noto-sans-jp/400.css';
+@import '@fontsource/noto-sans-devanagari/400.css';
+
+html, body { margin: 0; padding: 0; background: var(--bg, #F4F0E8); }
+* { box-sizing: border-box; }
+a { color: var(--ac); text-decoration: none; } a:hover { text-decoration: underline; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: default; }
+input, textarea, select { font: inherit; color: inherit; }
+input::placeholder, textarea::placeholder { color: var(--mu); }
+::selection { background: var(--acs); }
+:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+
+@keyframes siftspin { to { transform: rotate(360deg); } }
+@keyframes siftin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes siftpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes siftshake { 0%, 100% { transform: none; } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+/* Hover states from the prototype (style-hover). */
+.h-sf:hover { background: var(--sf) !important; }
+.h-sf2:hover { background: var(--sf2) !important; }
+.h-ac:hover { border-color: var(--ac) !important; }
+.h-acc:hover { border-color: var(--ac) !important; color: var(--ac) !important; }
+.h-col:hover { color: var(--ac) !important; }
+.h-ul:hover { text-decoration: underline; }
+.h-lift:hover { border-color: var(--ac) !important; transform: translateY(-2px); }
+.h-arch:hover { background: var(--sf) !important; opacity: 1 !important; }
+.h-write:hover { background: var(--sf) !important; }
+.h-drop:hover { border-color: var(--ac) !important; color: var(--ac) !important; }
+.a-key:active { background: var(--acs) !important; }
+.noscroll::-webkit-scrollbar { display: none; }

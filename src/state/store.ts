@@ -1,0 +1,291 @@
+import { create } from 'zustand';
+import type { ConflictDismissal, Digest, ImportFile, LayoutRow, Note, Profile, Settings, Todo, Topic, WfEntry, WfItemPayload, WfMutation } from '../types';
+import { db, getMeta, openDb, setMeta, type QueueOp, type SyncTable } from '../lib/db';
+import { cloud, LOCAL_USER, supabase } from '../lib/supabase';
+import { enqueue, fetchAll, fetchWf, flush, pendingCount, setSyncHandlers, subscribe, wireBackgroundFlush } from '../lib/sync';
+import { applyWfMutation, isItem, newSubtask } from '../lib/wf';
+import { nowIso, uid } from '../lib/format';
+import { sha256 } from '../keepImport';
+import { WF_BOARD } from '../lib/config';
+import wfSample from '../../supabase/weekly_focus_sample.json';
+
+export type View = 'stream' | 'week' | 'map' | 'lens' | 'todos' | 'conflicts' | 'archive';
+export interface NewNote {
+  id?: string; title: string; body: string; topic: Topic; labels?: string[]; ctx?: string[]; pinned?: boolean; vault?: boolean; archived?: boolean;
+  todos?: { text: string; done: boolean }[]; source?: Note['source']; source_file?: string | null; content_hash?: string | null; color?: string | null;
+  lang: Note['lang']; created_at?: string; edited_at?: string; image?: { path: string; dataUrl?: string } | null; wfItem?: string | null;
+}
+export interface Toast { id: string; msg: string; }
+export interface MapUi { zoom: number; pan: { x: number; y: number }; topic: string | null; hover: string | null; placed: string | null; dragging: string | null; }
+
+const DEFAULT_SETTINGS = (user: string): Settings => ({ user_id: user, monday_digest: true, idle_seconds: 60, ambient_seconds: 20, theme: 'light', updated_at: nowIso() });
+const pairKey = (a: string, b: string) => (a < b ? a + '|' + b : b + '|' + a);
+const byId = <T,>(rows: T[], k: (r: T) => string) => Object.fromEntries(rows.map(r => [k(r), r])) as Record<string, T>;
+const newer = (remote: { updated_at?: string }, local?: { updated_at?: string }) => !local || Date.parse(remote.updated_at || '') >= Date.parse(local.updated_at || '');
+const LOCAL_SALT = 'sift-local-vault:';
+
+interface State {
+  phase: 'boot' | 'signedOut' | 'ready'; userId: string; profile: Profile | null;
+  notes: Record<string, Note>; todos: Record<string, Todo>; layout: Record<string, { x: number; y: number }>;
+  wf: Record<string, WfEntry>; wfSyncedAt: number; dismissed: Record<string, true>; digests: Record<string, Digest>; settings: Settings;
+  pending: number; error: string | null; hasPin: boolean; pinIsDemo: boolean;
+  view: View; filter: string; query: string; selId: string | null; unlocked: boolean;
+  pin: { open: boolean; mode: 'enter' | 'set'; after: string | null }; toast: Toast | null; importOpen: boolean;
+  ambient: boolean; opened: Record<string, true>; sessionNew: Record<string, true>; composerFocused: boolean; sendFor: string | null; sendItem: string | null; map: MapUi; week: string | null;
+
+  init(user: string, profile?: Profile | null): Promise<void>;
+  setSignedOut(): void;
+  set(p: Partial<State>): void;
+  setMap(p: Partial<MapUi>): void;
+  go(view: View): void;
+  openNote(id: string): void;
+  askPin(after?: string | null, mode?: 'enter' | 'set'): void;
+  checkPin(pin: string): Promise<'ok' | 'wrong' | 'offline'>;
+  setPin(pin: string): Promise<boolean>;
+  lock(): void;
+  showToast(t: Toast | null): void;
+  addNotes(list: NewNote[], files?: Omit<ImportFile, 'user_id' | 'imported_at'>[]): Promise<Note[]>;
+  removeNote(id: string): Promise<void>;
+  updateNote(id: string, patch: Partial<Note>): Promise<void>;
+  toggleTodo(id: string): Promise<void>;
+  sendTodo(todoId: string, itemKey: string): Promise<void>;
+  toggleWfSubtask(itemKey: string, subId: string): Promise<void>;
+  mutateWf(itemKey: string, mut: WfMutation): Promise<void>;
+  setLayout(noteId: string, x: number, y: number): Promise<void>;
+  resetLayout(): Promise<void>;
+  dismissPair(a: string, b: string, on: boolean): Promise<void>;
+  setSettings(p: Partial<Settings>): Promise<void>;
+  refreshLinks(): Promise<void>;
+}
+
+export const useStore = create<State>()((set, get) => {
+  /** Write rows to Dexie and queue them for Supabase. */
+  const persist = async (ops: QueueOp[]) => { await enqueue(...ops); if (cloud) set({ pending: await pendingCount() }); };
+  const upsertOp = (table: SyncTable, row: object): QueueOp => ({ kind: 'upsert', table, row: row as Record<string, unknown> });
+  const saveOpened = (o: Record<string, true>) => { try { localStorage.setItem('sift-opened-' + get().userId, JSON.stringify(o)); } catch { /* storage unavailable */ } };
+
+  async function applyRemote(table: SyncTable, row: Record<string, unknown>, deleted: boolean) {
+    if (table === 'sift_notes') {
+      const id = row.id as string, local = get().notes[id];
+      if (deleted) { if (!local) return; const { [id]: _, ...rest } = get().notes; set({ notes: rest }); await db().notes.delete(id); return; }
+      if (!newer(row as unknown as Note, local)) return;
+      set({ notes: { ...get().notes, [id]: row as unknown as Note } }); await db().notes.put(row as unknown as Note);
+    } else if (table === 'sift_todos') {
+      const id = row.id as string, local = get().todos[id];
+      if (deleted) { if (!local) return; const { [id]: _, ...rest } = get().todos; set({ todos: rest }); await db().todos.delete(id); return; }
+      if (!newer(row as unknown as Todo, local)) return;
+      set({ todos: { ...get().todos, [id]: row as unknown as Todo } }); await db().todos.put(row as unknown as Todo);
+    }
+  }
+
+  async function applyWfEntry(entry: WfEntry) {
+    if (!get().userId) return;
+    // Replay our own queued mutations on top, so a stale realtime echo never undoes an optimistic tick.
+    const queued = (await db().queue.toArray()).filter((o): o is Extract<QueueOp, { kind: 'wf' }> => o.kind === 'wf' && o.item_key === entry.item_key);
+    let e = entry; if (isItem(e)) { let p = e.payload; queued.forEach(o => { p = applyWfMutation(p, o.mut); }); e = { ...e, payload: p }; }
+    set({ wf: { ...get().wf, [e.item_key]: e }, wfSyncedAt: Date.now() }); await db().wf.put(e);
+    if (!isItem(e)) return;
+    // WF → Sift: subtasks created from Sift carry src 'sift:<noteId>#<i>'; mirror their done state onto sift_todos.
+    const todos = Object.values(get().todos); const changed: Todo[] = []; const next = { ...get().todos };
+    e.payload.subtasks.forEach(s => {
+      if (!(s.src || '').startsWith('sift:')) return; const t = todos.find(x => x.wf_subtask_id === s.id); if (!t || t.done === s.done) return;
+      if (t.updated_at && Date.parse(t.updated_at) > s.u) return;
+      const nt = { ...t, done: s.done, updated_at: nowIso() }; next[t.id] = nt; changed.push(nt);
+    });
+    if (changed.length) { set({ todos: next }); await db().todos.bulkPut(changed); await persist(changed.map(t => upsertOp('sift_todos', t))); }
+  }
+
+  async function pull(user: string) {
+    if (!supabase || !navigator.onLine) return;
+    try {
+      const queued = await db().queue.toArray();
+      const pendingIds = new Set(queued.flatMap(o => (o.kind === 'upsert' ? [String(o.row.id ?? o.row.note_id ?? '')] : [])));
+      const [notes, todos, layout, digests, settings, dismissals, files] = await Promise.all([
+        fetchAll<Note>('sift_notes', user), fetchAll<Todo>('sift_todos', user), fetchAll<LayoutRow>('sift_note_layout', user), fetchAll<Digest>('sift_digests', user),
+        fetchAll<Settings>('sift_settings', user), fetchAll<ConflictDismissal>('sift_conflict_dismissals', user).catch(() => []), fetchAll<ImportFile>('sift_import_files', user),
+      ]);
+      const mergeRows = <T extends { id: string; updated_at?: string }>(local: Record<string, T>, remote: T[]) => {
+        const out: Record<string, T> = {}; const seen = new Set<string>();
+        remote.forEach(r => { seen.add(r.id); out[r.id] = newer(r, local[r.id]) ? r : local[r.id]; });
+        Object.values(local).forEach(l => { if (!seen.has(l.id) && pendingIds.has(l.id)) out[l.id] = l; }); // unsynced local rows survive; others were deleted remotely
+        return out;
+      };
+      const st = get();
+      const n = mergeRows(st.notes, notes), t = mergeRows(st.todos, todos);
+      const lay = { ...Object.fromEntries(layout.map(l => [l.note_id, { x: l.x, y: l.y }])), ...Object.fromEntries(Object.entries(st.layout).filter(([k]) => pendingIds.has(k))) };
+      await db().transaction('rw', [db().notes, db().todos, db().layout, db().digests, db().dismissals, db().importFiles], async () => {
+        await db().notes.clear(); await db().notes.bulkPut(Object.values(n));
+        await db().todos.clear(); await db().todos.bulkPut(Object.values(t));
+        await db().layout.clear(); await db().layout.bulkPut(Object.entries(lay).map(([note_id, p]) => ({ user_id: user, note_id, ...p })));
+        await db().digests.bulkPut(digests); await db().dismissals.bulkPut(dismissals); await db().importFiles.bulkPut(files);
+      });
+      set({ notes: n, todos: t, layout: lay, digests: { ...st.digests, ...byId(digests, d => d.week_of) },
+        dismissed: { ...st.dismissed, ...Object.fromEntries(dismissals.map(d => [pairKey(d.a, d.b), true as const])) },
+        settings: settings[0] ? { ...st.settings, ...settings[0] } : st.settings });
+      if (!settings[0]) await persist([upsertOp('sift_settings', st.settings)]);
+      const wf = await fetchWf(); for (const e of wf) await applyWfEntry(e);
+      const has = await supabase.rpc('sift_has_pin'); if (!has.error) set({ hasPin: !!has.data });
+    } catch (e) { set({ error: 'Could not reach Supabase: ' + ((e as Error).message || e) }); }
+  }
+
+  return {
+    phase: 'boot', userId: '', profile: null,
+    notes: {}, todos: {}, layout: {}, wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
+    pending: 0, error: null, hasPin: true, pinIsDemo: false,
+    view: 'stream', filter: 'all', query: '', selId: null, unlocked: false, pin: { open: false, mode: 'enter', after: null }, toast: null, importOpen: false,
+    ambient: false, opened: {}, sessionNew: {}, composerFocused: false, sendFor: null, sendItem: null, week: null, map: { zoom: 1, pan: { x: 0, y: 0 }, topic: null, hover: null, placed: null, dragging: null },
+
+    async init(user, profile = null) {
+      const d = openDb(user);
+      const [notes, todos, layout, wf, digests, dismissals, settings] = await Promise.all([
+        d.notes.toArray(), d.todos.toArray(), d.layout.toArray(), d.wf.toArray(), d.digests.toArray(), d.dismissals.toArray(), getMeta<Settings | null>('settings', null)]);
+      let opened: Record<string, true> = {}; try { opened = JSON.parse(localStorage.getItem('sift-opened-' + user) || '{}'); } catch { /* fresh */ }
+      let wfRows = wf;
+      if (!cloud && !wfRows.length) { wfRows = (wfSample.rows as { item_key: string; payload: unknown }[]).map(r => ({ board_id: WF_BOARD, item_key: r.item_key, payload: r.payload } as WfEntry)); await d.wf.bulkPut(wfRows); }
+      let pinIsDemo = false;
+      if (!cloud && !(await getMeta<string | null>('pinHash', null))) { await setMeta('pinHash', await sha256(LOCAL_SALT + '0000')); await setMeta('pinIsDemo', true); }
+      if (!cloud) pinIsDemo = await getMeta('pinIsDemo', false);
+      set({
+        phase: 'ready', userId: user, profile, notes: byId(notes, n => n.id), todos: byId(todos, t => t.id),
+        layout: Object.fromEntries(layout.map(l => [l.note_id, { x: l.x, y: l.y }])), wf: byId(wfRows, e => e.item_key),
+        digests: byId(digests, x => x.week_of), dismissed: Object.fromEntries(dismissals.map(x => [pairKey(x.a, x.b), true as const])),
+        settings: settings ?? DEFAULT_SETTINGS(user), opened, pinIsDemo, unlocked: sessionStorage.getItem('sift-unlocked') === user,
+      });
+      if (!cloud) return;
+      setSyncHandlers({
+        onRemoteRow: (t, r, del) => void applyRemote(t, r, del),
+        onWfEntry: e => void applyWfEntry(e),
+        onError: msg => set({ error: msg }),
+        onQueueChange: n => set({ pending: n }),
+      });
+      wireBackgroundFlush(); subscribe(user); await flush(); await pull(user);
+      set({ pending: await pendingCount() });
+    },
+    setSignedOut: () => set({ phase: 'signedOut', userId: '', notes: {}, todos: {}, layout: {}, wf: {}, unlocked: false, selId: null }),
+    set: p => set(p),
+    setMap: p => set({ map: { ...get().map, ...p } }),
+    go: view => set({ view, selId: null, query: '', sendFor: null, map: { ...get().map, placed: null } }),
+    openNote(id) {
+      const n = get().notes[id]; if (!n) return;
+      if (n.vault && !get().unlocked) { get().askPin(id); return; }
+      const opened = { ...get().opened, [id]: true as const }; saveOpened(opened); set({ selId: id, opened, query: '' });
+    },
+    askPin: (after = null, mode) => set({ pin: { open: true, mode: mode ?? (get().hasPin ? 'enter' : 'set'), after } }),
+    async checkPin(pin) {
+      let ok = false;
+      if (supabase) { if (!navigator.onLine) return 'offline'; const r = await supabase.rpc('sift_check_pin', { p_pin: pin }); if (r.error) return 'offline'; ok = !!r.data; }
+      else ok = (await sha256(LOCAL_SALT + pin)) === (await getMeta('pinHash', ''));
+      if (!ok) return 'wrong';
+      const after = get().pin.after; sessionStorage.setItem('sift-unlocked', get().userId);
+      set({ unlocked: true, pin: { open: false, mode: 'enter', after: null } }); if (after) get().openNote(after);
+      return 'ok';
+    },
+    async setPin(pin) {
+      if (supabase) { const r = await supabase.rpc('sift_set_pin', { p_pin: pin }); if (r.error) { set({ error: 'Could not set PIN: ' + r.error.message }); return false; } }
+      else { await setMeta('pinHash', await sha256(LOCAL_SALT + pin)); await setMeta('pinIsDemo', false); }
+      const after = get().pin.after; sessionStorage.setItem('sift-unlocked', get().userId);
+      set({ hasPin: true, pinIsDemo: false, unlocked: true, pin: { open: false, mode: 'enter', after: null } }); if (after) get().openNote(after);
+      return true;
+    },
+    lock: () => { sessionStorage.removeItem('sift-unlocked'); const s = get().selId; set({ unlocked: false, selId: s && get().notes[s]?.vault ? null : s }); },
+    showToast: t => set({ toast: t }),
+
+    async addNotes(list, files = []) {
+      const user = get().userId, now = nowIso(); const notes: Note[] = [], todos: Todo[] = [], ops: QueueOp[] = [], tail: QueueOp[] = [];
+      const wfAdds: Record<string, ReturnType<typeof newSubtask>[]> = {};
+      for (const x of list) {
+        const id = x.id ?? uid();
+        const note: Note = { id, user_id: user, title: x.title, body: x.body, summary: null, summary_orig: null, lang: x.lang, topic: x.topic, labels: x.labels ?? [], ctx: x.ctx ?? [],
+          pinned: !!x.pinned, archived: !!x.archived, vault: !!x.vault || x.topic === 'career', color: x.color ?? null, source: x.source ?? 'sift', source_file: x.source_file ?? null,
+          content_hash: x.content_hash ?? null, image_path: x.image?.path ?? null, created_at: x.created_at ?? now, edited_at: x.edited_at ?? x.created_at ?? now, updated_at: now, deleted_at: null };
+        notes.push(note); ops.push(upsertOp('sift_notes', note));
+        (x.todos ?? []).forEach((t, i) => {
+          const todo: Todo = { id: uid(), user_id: user, note_id: id, ord: i, text: t.text, done: t.done, wf_board_id: null, wf_item_key: null, wf_subtask_id: null, updated_at: now };
+          if (x.wfItem) { const s = newSubtask(t.text, x.topic, x.ctx ?? [], `sift:${id}#${i}`); (wfAdds[x.wfItem] ||= []).push(s); Object.assign(todo, { wf_board_id: WF_BOARD, wf_item_key: x.wfItem, wf_subtask_id: s.id }); }
+          todos.push(todo); ops.push(upsertOp('sift_todos', todo));
+        });
+        if (x.image?.dataUrl) { await db().images.put({ path: x.image.path, dataUrl: x.image.dataUrl }); tail.push({ kind: 'upload', path: x.image.path, dataUrl: x.image.dataUrl }); }
+      }
+      const fileRows: ImportFile[] = files.map(f => ({ ...f, user_id: user, imported_at: now }));
+      fileRows.forEach(f => tail.push(upsertOp('sift_import_files', f)));
+      await db().transaction('rw', [db().notes, db().todos, db().importFiles], async () => { await db().notes.bulkPut(notes); await db().todos.bulkPut(todos); await db().importFiles.bulkPut(fileRows); });
+      const sessionNew = { ...get().sessionNew }; if (list.length <= 3) notes.forEach(n => { sessionNew[n.id] = true; });
+      set({ notes: { ...get().notes, ...byId(notes, n => n.id) }, todos: { ...get().todos, ...byId(todos, t => t.id) }, sessionNew });
+      await persist([...ops, ...tail]);
+      for (const [k, subs] of Object.entries(wfAdds)) await get().mutateWf(k, { type: 'add', subtasks: subs });
+      return notes;
+    },
+
+    async removeNote(id) {
+      const st = get(); const note = st.notes[id]; if (!note) return;
+      const { [id]: _, ...notes } = st.notes; const todos = Object.fromEntries(Object.entries(st.todos).filter(([, t]) => t.note_id !== id));
+      const { [id]: __, ...layout } = st.layout;
+      set({ notes, todos, layout, selId: st.selId === id ? null : st.selId, toast: st.toast?.id === id ? null : st.toast, map: { ...st.map, placed: st.map.placed === id ? null : st.map.placed, hover: null } });
+      await db().notes.delete(id); await db().todos.where('note_id').equals(id).delete(); await db().layout.delete(id);
+      if (note.image_path) await db().images.delete(note.image_path);
+      await persist([{ kind: 'delete', table: 'sift_notes', match: { id } }]); // todos, links and layout cascade
+      const prefix = `sift:${id}#`;
+      for (const e of Object.values(st.wf)) if (isItem(e) && e.payload.subtasks.some(s => (s.src || '').startsWith(prefix))) await get().mutateWf(e.item_key, { type: 'remove_src', prefix });
+    },
+
+    async updateNote(id, patch) {
+      const n = get().notes[id]; if (!n) return;
+      const next: Note = { ...n, ...patch, updated_at: nowIso() };
+      if (patch.topic === 'career') next.vault = true;
+      set({ notes: { ...get().notes, [id]: next } }); await db().notes.put(next); await persist([upsertOp('sift_notes', next)]);
+    },
+
+    async toggleTodo(id) {
+      const t = get().todos[id]; if (!t) return; const nt: Todo = { ...t, done: !t.done, updated_at: nowIso() };
+      set({ todos: { ...get().todos, [id]: nt } }); await db().todos.put(nt); await persist([upsertOp('sift_todos', nt)]);
+      if (nt.wf_item_key && nt.wf_subtask_id) await get().mutateWf(nt.wf_item_key, { type: 'set_done', id: nt.wf_subtask_id, done: nt.done });
+    },
+
+    async sendTodo(todoId, itemKey) {
+      const t = get().todos[todoId], n = t && get().notes[t.note_id]; if (!t || !n) return;
+      const s = newSubtask(t.text, n.topic, n.ctx, `sift:${n.id}#${t.ord}`); s.done = t.done;
+      const nt: Todo = { ...t, wf_board_id: WF_BOARD, wf_item_key: itemKey, wf_subtask_id: s.id, updated_at: nowIso() };
+      set({ todos: { ...get().todos, [todoId]: nt }, sendFor: null }); await db().todos.put(nt); await persist([upsertOp('sift_todos', nt)]);
+      await get().mutateWf(itemKey, { type: 'add', subtasks: [s] });
+    },
+
+    async toggleWfSubtask(itemKey, subId) {
+      const e = get().wf[itemKey]; if (!e || !isItem(e)) return; const s = e.payload.subtasks.find(x => x.id === subId); if (!s) return;
+      const linked = Object.values(get().todos).find(t => t.wf_subtask_id === subId);
+      if (linked) await get().toggleTodo(linked.id); else await get().mutateWf(itemKey, { type: 'set_done', id: subId, done: !s.done });
+    },
+
+    async mutateWf(itemKey, mut) {
+      const e = get().wf[itemKey]; if (!e || !isItem(e)) return;
+      const next: WfEntry = { ...e, payload: applyWfMutation(e.payload as WfItemPayload, mut) };
+      set({ wf: { ...get().wf, [itemKey]: next }, wfSyncedAt: Date.now() }); await db().wf.put(next);
+      await persist([{ kind: 'wf', item_key: itemKey, mut }]);
+    },
+
+    async setLayout(noteId, x, y) {
+      set({ layout: { ...get().layout, [noteId]: { x, y } } });
+      const row: LayoutRow = { user_id: get().userId, note_id: noteId, x, y }; await db().layout.put(row); await persist([upsertOp('sift_note_layout', row)]);
+    },
+    async resetLayout() {
+      const ids = Object.keys(get().layout); set({ layout: {}, map: { ...get().map, zoom: 1, pan: { x: 0, y: 0 } } }); await db().layout.clear();
+      await persist(ids.map(id => ({ kind: 'delete', table: 'sift_note_layout', match: { user_id: get().userId, note_id: id } })));
+    },
+
+    async dismissPair(a, b, on) {
+      const [x, y] = a < b ? [a, b] : [b, a]; const k = x + '|' + y; const d = { ...get().dismissed };
+      if (on) d[k] = true; else delete d[k]; set({ dismissed: d });
+      const row: ConflictDismissal = { user_id: get().userId, a: x, b: y };
+      if (on) { await db().dismissals.put(row); await persist([upsertOp('sift_conflict_dismissals', row)]); }
+      else { await db().dismissals.delete([x, y]); await persist([{ kind: 'delete', table: 'sift_conflict_dismissals', match: { ...row } }]); }
+    },
+
+    async setSettings(p) {
+      const next = { ...get().settings, ...p, user_id: get().userId, updated_at: nowIso() }; set({ settings: next });
+      await setMeta('settings', next); await persist([upsertOp('sift_settings', next)]);
+    },
+
+    async refreshLinks() { if (supabase && navigator.onLine) { await flush(); await supabase.rpc('sift_refresh_links'); } },
+  };
+});
+
+export const LOCAL = LOCAL_USER;

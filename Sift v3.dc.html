@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
+<script src="sift-data.js"></script>
+<style>
+html,body{margin:0;padding:0;background:#F4F0E8}
+*{box-sizing:border-box}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+input::placeholder,textarea::placeholder{color:var(--mu)}
+::selection{background:var(--acs)}
+@keyframes siftspin{to{transform:rotate(360deg)}}
+@keyframes siftin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes siftpulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes siftshake{0%,100%{transform:none}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+</style>
+</helmet>
+<div data-screen-label="Sift" style="--bg:{{ c.bg }};--sf:{{ c.sf }};--sf2:{{ c.sf2 }};--ink:{{ c.ink }};--mu:{{ c.mu }};--ln:{{ c.ln }};--ac:{{ c.ac }};--acs:{{ c.acs }};--acink:{{ c.acink }};min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Helvetica Neue',Helvetica,'Noto Sans JP','Noto Sans Devanagari',sans-serif;font-size:14px;line-height:1.5;transition:background .3s,color .3s">
+<div style="max-width:{{ frameMax }};margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative">
+
+<header style="position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:{{ hdrGap }};padding:{{ hdrPad }};background:color-mix(in srgb, var(--bg) 86%, transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)">
+  <button onClick="{{ goStream }}" style="border:0;background:transparent;padding:0;font-family:Newsreader,Georgia,serif;font-size:22px;font-weight:500;letter-spacing:-.02em;display:flex;align-items:center;gap:8px">
+    <span style="width:9px;height:9px;border-radius:50%;background:var(--ac);display:inline-block"></span>Sift
+  </button>
+  <div style="flex:1;min-width:0;display:flex;justify-content:center">
+    <div style="position:relative;width:100%;max-width:440px">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:999px;background:var(--sf);border:1px solid var(--ln)">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)">/</span>
+        <input value="{{ q }}" onChange="{{ setQ }}" onKeyDown="{{ onKey }}" placeholder="Search, or / for commands" style="flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:14px">
+        <sc-if value="{{ hasQ }}" hint-placeholder-val="{{ false }}"><button onClick="{{ clearQ }}" style="border:0;background:transparent;color:var(--mu);padding:0 2px;line-height:1">×</button></sc-if>
+      </div>
+      <sc-if value="{{ hitsOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:6px;box-shadow:0 18px 50px rgba(0,0,0,.14);display:flex;flex-direction:column;animation:siftin .18s ease-out">
+          <sc-for list="{{ hits }}" as="h" hint-placeholder-count="3">
+            <button onClick="{{ h.open }}" style="display:grid;grid-template-columns:10px 1fr auto;gap:12px;align-items:center;padding:9px 12px;border:0;border-radius:9px;background:transparent;text-align:left" style-hover="background:var(--sf2)">
+              <span style="width:8px;height:8px;border-radius:50%;background:{{ h.color }}"></span>
+              <span style="display:flex;flex-direction:column;min-width:0"><span style="font-family:Newsreader,Georgia,serif;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ h.title }}</span><span style="font-size:12px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ h.sum }}</span></span>
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)">{{ h.date }}</span>
+            </button>
+          </sc-for>
+          <div style="padding:6px 12px 4px;font-size:11px;color:var(--mu);border-top:1px solid var(--ln)">{{ hitsFoot }}</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ cmdOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:6px;box-shadow:0 18px 50px rgba(0,0,0,.14);display:flex;flex-direction:column;animation:siftin .18s ease-out">
+          <sc-for list="{{ cmds }}" as="cm" hint-placeholder-count="4">
+            <button onClick="{{ cm.run }}" style="display:flex;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:9px;background:transparent;text-align:left" style-hover="background:var(--sf2)">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--ac);min-width:84px">{{ cm.key }}</span><span>{{ cm.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+  <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+    <nav style="display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--sf);border:1px solid var(--ln)">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+        <button onClick="{{ n.go }}" style="padding:6px 11px;border:0;border-radius:999px;background:{{ n.bg }};color:{{ n.color }};font-size:13px;display:flex;align-items:center;gap:6px;transition:background .2s">
+          <span>{{ n.label }}</span><sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;padding:1px 6px;border-radius:999px;background:{{ n.badgeBg }};color:{{ n.badgeColor }}">{{ n.count }}</span></sc-if>
+        </button>
+      </sc-for>
+    </nav>
+  </sc-if>
+  <div style="display:flex;gap:6px">
+    <button onClick="{{ vaultBtn }}" title="{{ vaultTitle }}" style="height:34px;padding:0 11px;border-radius:999px;border:1px solid {{ vaultBorder }};background:{{ vaultBg }};display:flex;align-items:center;gap:7px;color:{{ vaultColor }};font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.06em" style-hover="border-color:var(--ac)">
+      <span style="position:relative;width:10px;height:12px;display:inline-block">
+        <span style="position:absolute;left:1px;top:{{ shackleTop }};width:8px;height:7px;border:1.5px solid currentColor;border-bottom:0;border-radius:4px 4px 0 0;transition:top .2s"></span>
+        <span style="position:absolute;left:0;bottom:0;width:10px;height:7px;border-radius:2px;background:currentColor"></span>
+      </span>
+      <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}"><span>{{ vaultWord }}</span></sc-if>
+    </button>
+    <button onClick="{{ startAmbient }}" title="Ambient mode" style="width:34px;height:34px;border-radius:50%;border:1px solid var(--ln);background:var(--sf);display:grid;place-items:center" style-hover="border-color:var(--ac)">
+      <span style="width:14px;height:14px;border-radius:50%;border:1.5px solid var(--mu);display:grid;place-items:center"><span style="width:5px;height:5px;border-radius:50%;background:var(--ac)"></span></span>
+    </button>
+    <button onClick="{{ toggleDark }}" title="Toggle theme" style="width:34px;height:34px;border-radius:50%;border:1px solid var(--ln);background:var(--sf);display:grid;place-items:center" style-hover="border-color:var(--ac)">
+      <span style="width:12px;height:12px;border-radius:50%;background:{{ sunBg }};box-shadow:{{ sunShadow }};display:inline-block"></span>
+    </button>
+  </div>
+</header>
+
+<main style="padding:{{ mainPad }};display:flex;flex-direction:column;gap:{{ sectionGap }};flex:1">
+
+<sc-if value="{{ isStream }}" hint-placeholder-val="{{ true }}">
+  <sc-if value="{{ hasResurface }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ res.open }}" style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:center;padding:14px 18px;border:1px solid var(--ln);border-radius:16px;background:var(--sf);text-align:left;opacity:{{ resOpacity }};transform:{{ resShift }};transition:opacity .45s,transform .45s" style-hover="border-color:var(--ac)">
+      <div style="display:flex;flex-direction:column;gap:2px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">
+        <span style="color:var(--ac)">From your past</span><span>{{ res.ago }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+        <span style="font-family:Newsreader,Georgia,serif;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ res.title }}</span>
+        <span style="font-size:13px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ res.sum }}</span>
+      </div>
+      <div style="display:flex;gap:4px">
+        <sc-for list="{{ resDots }}" as="d" hint-placeholder-count="5"><span style="width:5px;height:5px;border-radius:50%;background:{{ d.bg }};transition:background .3s"></span></sc-for>
+      </div>
+    </button>
+  </sc-if>
+
+  <section style="display:grid;grid-template-columns:{{ heroCols }};gap:{{ heroGap }};align-items:end;padding-bottom:{{ sectionGap }};border-bottom:1px solid var(--ln)">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">
+        <span style="width:18px;height:1px;background:var(--ac)"></span><span>{{ weekLabel }}</span><span>·</span><span>{{ weekCount }}</span>
+      </div>
+      <p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ digestSize }};font-weight:300;line-height:1.28;letter-spacing:-.015em;text-wrap:pretty;white-space:pre-line;max-width:28ch">{{ digestText }}</p>
+      <button onClick="{{ goWeek }}" style="align-self:flex-start;display:flex;align-items:center;gap:10px;padding:6px 12px 6px 6px;border:1px solid var(--ln);border-radius:999px;background:var(--sf);font-size:13px" style-hover="border-color:var(--ac)">
+        <span style="width:22px;height:22px;border-radius:50%;background:conic-gradient(var(--ac) {{ wfPct }}, var(--sf2) 0);display:grid;place-items:center"><span style="width:14px;height:14px;border-radius:50%;background:var(--sf)"></span></span>
+        <span>{{ wfLine }}</span>
+      </button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button onClick="{{ genDigest }}" style="padding:8px 14px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px;display:flex;align-items:center;gap:8px">
+          <sc-if value="{{ digestBusy }}" hint-placeholder-val="{{ false }}"><span style="width:11px;height:11px;border:2px solid rgba(255,255,255,.3);border-top-color:var(--bg);border-radius:50%;animation:siftspin .8s linear infinite;display:inline-block"></span></sc-if>
+          <span>{{ digestBtn }}</span>
+        </button>
+        <div style="display:flex;gap:2px;overflow-x:auto;padding:2px">
+          <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="8">
+            <button onClick="{{ w.go }}" title="{{ w.label }}" style="width:26px;height:26px;border-radius:50%;border:1px solid {{ w.border }};background:{{ w.bg }};display:grid;place-items:center;flex:none" style-hover="border-color:var(--ac)">
+              <span style="width:{{ w.dot }};height:{{ w.dot }};border-radius:50%;background:{{ w.dotBg }};display:inline-block;transition:all .2s"></span>
+            </button>
+          </sc-for>
+        </div>
+        <span style="font-size:12px;color:var(--mu)">{{ digestNote }}</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <button onClick="{{ openCapture }}" style="display:flex;align-items:center;gap:12px;padding:16px 18px;border:1px solid var(--ac);border-radius:14px;background:var(--acs);text-align:left" style-hover="background:var(--sf)">
+        <span style="width:28px;height:28px;border-radius:50%;background:var(--ac);color:var(--acink);display:grid;place-items:center;font-size:18px;line-height:1;flex:none">+</span>
+        <span style="flex:1;font-family:Newsreader,Georgia,serif;font-size:18px">Write something</span>
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;padding:2px 7px;border-radius:5px;border:1px solid var(--ln);color:var(--mu);background:var(--sf)">N</span>
+      </button>
+      <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin-top:6px">Pinned</div>
+      <sc-for list="{{ pinned }}" as="n" hint-placeholder-count="2">
+        <button onClick="{{ n.open }}" style="display:flex;align-items:baseline;gap:12px;padding:12px 14px;border:1px solid var(--ln);border-radius:12px;background:var(--sf);text-align:left;min-width:0" style-hover="border-color:var(--ac)">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu);flex:none">{{ n.dateShort }}</span>
+          <span style="font-family:Newsreader,Georgia,serif;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.title }}</span>
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:var(--ac);flex:none">{{ n.lang }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </section>
+
+  <sc-if value="{{ hasFilter }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--mu)">Showing</span>
+      <span style="padding:5px 12px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px;display:flex;gap:8px;align-items:center">{{ filterLabel }}<button onClick="{{ clearFilter }}" style="border:0;background:transparent;color:var(--bg);padding:0;line-height:1;opacity:.7">×</button></span>
+      <span style="font-size:13px;color:var(--mu)">{{ visibleCount }}</span>
+    </div>
+  </sc-if>
+
+  <sc-for list="{{ months }}" as="m" hint-placeholder-count="3">
+    <section style="display:grid;grid-template-columns:{{ monthCols }};gap:{{ monthGap }};align-items:start">
+      <div style="position:{{ monthPos }};top:84px;display:flex;flex-direction:{{ monthDir }};gap:{{ monthLabelGap }};align-items:baseline">
+        <span style="font-family:Newsreader,Georgia,serif;font-size:{{ monthSize }};font-weight:300;line-height:.95;letter-spacing:-.03em">{{ m.label }}</span>
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)">{{ m.year }} · {{ m.count }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;min-width:0">
+        <sc-for list="{{ m.rows }}" as="n" hint-placeholder-count="2">
+          <article onClick="{{ n.open }}" style="display:grid;grid-template-columns:{{ rowCols }};gap:{{ rowGap }};padding:18px 14px;margin:0 -14px;border-top:1px solid var(--ln);border-radius:12px;cursor:pointer;transition:background .15s" style-hover="background:var(--sf)">
+            <div style="display:flex;flex-direction:column;gap:2px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu);line-height:1.4">
+              <span style="color:var(--ink);font-size:13px">{{ n.day }}</span><span>{{ n.dow }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                <h3 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ titleSize }};font-weight:400;line-height:1.2;letter-spacing:-.01em;text-wrap:pretty;color:{{ n.titleColor }};font-style:{{ n.titleStyle }}">{{ n.title }}</h3>
+                <sc-for list="{{ n.chips }}" as="ch" hint-placeholder-count="1"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:{{ ch.bg }};color:{{ ch.color }}">{{ ch.t }}</span></sc-for>
+              </div>
+              <p style="margin:0;color:var(--mu);font-size:14px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:68ch">{{ n.sumShown }}</p>
+              <sc-if value="{{ n.hasTodos }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ac)"><span style="width:10px;height:10px;border:1.5px solid var(--ac);border-radius:3px;display:inline-block"></span>{{ n.todoLabel }}</div>
+              </sc-if>
+            </div>
+            <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu);text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end">
+              <span style="color:var(--ac)">{{ n.langShown }}</span><span>{{ n.wcShown }}</span>
+            </div>
+          </article>
+        </sc-for>
+      </div>
+    </section>
+  </sc-for>
+  <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+    <p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:300;font-style:italic;color:var(--mu)">Nothing here. Clear the search or filter.</p>
+  </sc-if>
+</sc-if>
+
+<sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">
+      <span style="width:18px;height:1px;background:var(--ac)"></span><span>Weekly Focus · my_week</span>
+      <span style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;padding:2px 8px;border-radius:999px;background:var(--acs);color:var(--ac)"><span style="width:6px;height:6px;border-radius:50%;background:var(--ac);animation:siftpulse 2s ease-in-out infinite"></span>{{ syncLabel }}</span>
+    </div>
+    <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ h1Size }};font-weight:300;letter-spacing:-.03em;line-height:1">{{ wfHeadline }}</h1>
+    <p style="margin:0;color:var(--mu);max-width:60ch">Two-way: tick here or in Weekly Focus and both update. Tasks sent from a note keep a link back to it. {{ parkedNote }}</p>
+  </div>
+  <div style="display:grid;grid-template-columns:{{ wfCols }};gap:14px;align-items:start">
+    <sc-for list="{{ wfItems }}" as="it" hint-placeholder-count="3">
+      <section style="display:flex;flex-direction:column;border:1px solid var(--ln);border-radius:16px;background:var(--sf);overflow:hidden">
+        <div style="display:flex;flex-direction:column;gap:4px;padding:16px 18px;border-bottom:1px solid var(--ln)">
+          <div style="display:flex;justify-content:space-between;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)"><span style="color:var(--ac)">{{ it.key }}</span><span>P{{ it.pri }} · {{ it.progress }}</span></div>
+          <h3 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:400;letter-spacing:-.01em">{{ it.objective }}</h3>
+        </div>
+        <div style="display:flex;flex-direction:column;padding:4px 8px 8px">
+          <sc-for list="{{ it.subs }}" as="st" hint-placeholder-count="2">
+            <div onClick="{{ st.toggle }}" style="display:grid;grid-template-columns:22px 1fr;gap:10px;padding:10px;border-radius:10px;cursor:pointer" style-hover="background:var(--sf2)">
+              <span style="width:18px;height:18px;margin-top:2px;border-radius:50%;border:1.5px solid {{ st.boxBorder }};background:{{ st.boxBg }};display:grid;place-items:center;color:var(--bg);font-size:10px;transition:all .15s">{{ st.mark }}</span>
+              <div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+                <span style="font-size:14px;text-decoration:{{ st.deco }};color:{{ st.color }}">{{ st.t }}</span>
+                <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+                  <sc-for list="{{ st.badges }}" as="b" hint-placeholder-count="2"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;padding:1px 6px;border-radius:4px;background:{{ b.bg }};color:{{ b.color }}">{{ b.t }}</span></sc-for>
+                  <sc-if value="{{ st.fromSift }}" hint-placeholder-val="{{ false }}"><button onClick="{{ st.openNote }}" style="border:0;background:transparent;padding:0;font-size:11px;color:var(--ac)" style-hover="text-decoration:underline">↗ {{ st.noteTitle }}</button></sc-if>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ it.empty }}" hint-placeholder-val="{{ false }}"><p style="margin:8px 10px;font-size:13px;color:var(--mu);font-style:italic">All tasks here are parked.</p></sc-if>
+        </div>
+      </section>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:{{ pairCols }};gap:14px">
+    <div style="padding:16px 18px;border-radius:14px;border:1px dashed var(--ln);display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">Done last week</span><span style="font-family:Newsreader,Georgia,serif;font-size:17px">{{ eowDone }}</span></div>
+    <div style="padding:16px 18px;border-radius:14px;border:1px dashed var(--ln);display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">Carried over</span><span style="font-family:Newsreader,Georgia,serif;font-size:17px">{{ eowCarry }}</span></div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isMap }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ h1Size }};font-weight:300;letter-spacing:-.03em;line-height:1">What's near what</h1>
+      <p style="margin:0;color:var(--mu);max-width:56ch">Colour is topic, lines are relevance. Drag notes to rearrange, drag the background to pan, ⌘/Ctrl-scroll or the buttons to zoom. Tap a topic below to highlight it.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;flex:0 1 380px;min-width:0">
+      <form onSubmit="{{ mapSave }}" style="display:flex;align-items:center;gap:8px;padding:8px 8px 8px 14px;border:1px solid var(--ac);border-radius:999px;background:var(--sf)">
+        <input value="{{ mapDraft }}" onChange="{{ setMapDraft }}" placeholder="Drop a thought onto the map" style="flex:1;min-width:0;border:0;background:transparent;outline:none;font-family:Newsreader,Georgia,serif;font-size:15px">
+        <button type="submit" style="padding:6px 12px;border:0;border-radius:999px;background:var(--ac);color:var(--acink);font-size:12px;opacity:{{ mapBtnOp }}">Place</button>
+      </form>
+      <span style="font-size:12px;color:var(--mu);padding-left:14px">{{ mapHint }}</span>
+    </div>
+  </div>
+  <sc-if value="{{ hasPlaced }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-radius:14px;background:var(--acs);animation:siftin .2s ease-out">
+      <span style="width:10px;height:10px;border-radius:50%;background:{{ placed.color }};box-shadow:0 0 0 4px var(--sf)"></span>
+      <span style="font-size:14px;flex:1;min-width:0">{{ placed.msg }}</span>
+      <button onClick="{{ placed.open }}" style="padding:5px 12px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12px">Open note</button>
+      <button onClick="{{ placed.undo }}" style="padding:5px 10px;border:0;border-radius:999px;background:transparent;color:var(--ac);font-size:12px">Undo</button>
+    </div>
+  </sc-if>
+  <section ref="{{ mapRef }}" onPointerDown="{{ bgDown }}" style="position:relative;width:100%;aspect-ratio:{{ mapAspect }};max-height:620px;border:1px solid var(--ln);border-radius:18px;background:var(--sf);overflow:hidden;cursor:{{ mapCursor }};touch-action:none;user-select:none">
+    <div style="position:absolute;inset:0;transform:translate({{ panX }}px,{{ panY }}px) scale({{ zoom }});transform-origin:50% 50%;transition:{{ mapTrans }}">
+      <svg viewBox="0 0 100 62.5" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+        <sc-for list="{{ ghostEdges }}" as="g" hint-placeholder-count="0">
+          <line x1="50" y1="31.25" x2="{{ g.x }}" y2="{{ g.y }}" style="stroke:var(--ac);stroke-width:1.5px;stroke-dasharray:4 4;opacity:.8;vector-effect:non-scaling-stroke"></line>
+        </sc-for>
+        <sc-for list="{{ edges }}" as="e" hint-placeholder-count="4">
+          <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" style="stroke:var(--ac);stroke-width:{{ e.w }};stroke-linecap:round;opacity:{{ e.op }};vector-effect:non-scaling-stroke;transition:opacity .2s"></line>
+        </sc-for>
+      </svg>
+      <sc-for list="{{ nodes }}" as="nd" hint-placeholder-count="6">
+        <button onPointerDown="{{ nd.down }}" onMouseEnter="{{ nd.enter }}" onMouseLeave="{{ nd.leave }}" style="position:absolute;left:{{ nd.x }}%;top:{{ nd.y }}%;transform:translate(-50%,-50%);display:flex;flex-direction:{{ nd.dir }};align-items:center;gap:5px;border:0;background:transparent;padding:6px;opacity:{{ nd.op }};transition:opacity .2s;cursor:{{ nd.cursor }};touch-action:none;z-index:{{ nd.z }}">
+          <span style="width:{{ nd.size }};height:{{ nd.size }};border-radius:50%;background:{{ nd.color }};box-shadow:0 0 0 3px var(--sf),{{ nd.ring }};transition:width .15s,height .15s"></span>
+          <span style="font-size:11px;font-weight:{{ nd.weight }};max-width:{{ mapLabelMax }};white-space:normal;line-height:1.2;text-align:center;padding:1px 4px;text-shadow:0 0 6px var(--sf),0 0 2px var(--sf)">{{ nd.title }}</span>
+        </button>
+      </sc-for>
+      <sc-if value="{{ hasGhost }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;animation:siftin .2s ease-out">
+          <span style="width:18px;height:18px;border-radius:50%;border:2px dashed {{ ghost.color }};background:var(--sf);animation:siftpulse 1.4s ease-in-out infinite"></span>
+          <span style="font-size:11px;padding:3px 9px;border-radius:999px;background:var(--ink);color:var(--bg);white-space:nowrap">{{ ghost.label }}</span>
+        </div>
+      </sc-if>
+    </div>
+    <div onPointerDown="{{ stop }}" style="position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--ln);border-radius:999px;background:var(--sf);cursor:default">
+      <button onClick="{{ zoomOut }}" style="width:28px;height:28px;border:0;border-radius:50%;background:transparent;font-size:16px;line-height:1" style-hover="background:var(--sf2)">−</button>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu);min-width:40px;text-align:center">{{ zoomLabel }}</span>
+      <button onClick="{{ zoomIn }}" style="width:28px;height:28px;border:0;border-radius:50%;background:transparent;font-size:16px;line-height:1" style-hover="background:var(--sf2)">+</button>
+      <sc-if value="{{ hasMapEdits }}" hint-placeholder-val="{{ false }}"><button onClick="{{ resetMap }}" style="height:28px;padding:0 10px;border:0;border-left:1px solid var(--ln);background:transparent;font-size:12px;color:var(--ac)">Reset</button></sc-if>
+    </div>
+    <sc-if value="{{ hasMapTopic }}" hint-placeholder-val="{{ false }}">
+      <div onPointerDown="{{ stop }}" style="position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12px;cursor:default;animation:siftin .15s ease-out">
+        <span>Only {{ mapTopicName }}</span>
+        <button onClick="{{ mapTopicToStream }}" style="border:0;border-radius:999px;background:var(--bg);color:var(--ink);font-size:11px;padding:3px 9px">Show in stream</button>
+        <button onClick="{{ clearMapTopic }}" style="border:0;background:transparent;color:var(--bg);font-size:14px;line-height:1;padding:0 4px">×</button>
+      </div>
+    </sc-if>
+    <div onPointerDown="{{ stop }}" style="position:absolute;left:14px;right:14px;bottom:12px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;cursor:default">
+      <sc-for list="{{ legend }}" as="lg" hint-placeholder-count="6">
+        <button onClick="{{ lg.go }}" style="display:flex;align-items:center;gap:6px;border:1px solid {{ lg.border }};border-radius:999px;background:{{ lg.bg }};padding:3px 9px;font-size:11px;font-weight:{{ lg.weight }};color:var(--ink);opacity:{{ lg.op }};transition:opacity .2s" style-hover="border-color:var(--ac)"><span style="width:8px;height:8px;border-radius:50%;background:{{ lg.color }}"></span>{{ lg.name }}</button>
+      </sc-for>
+      <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:var(--mu)">{{ mapFoot }}</span>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isLens }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ h1Size }};font-weight:300;letter-spacing:-.03em;line-height:1">What your notes are about</h1>
+    <p style="margin:0;color:var(--mu);max-width:56ch">Six threads across your notes and three languages. Tap one to filter the stream.</p>
+  </div>
+  <section style="display:grid;grid-template-columns:{{ lensCols }};gap:12px">
+    <sc-for list="{{ themes }}" as="t" hint-placeholder-count="6">
+      <button onClick="{{ t.go }}" style="grid-column:{{ t.spanShown }};display:flex;flex-direction:column;gap:12px;padding:20px 22px;border:1px solid var(--ln);border-radius:18px;background:{{ t.bg }};text-align:left;min-height:200px;transition:transform .2s,border-color .2s" style-hover="border-color:var(--ac);transform:translateY(-2px)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <span style="font-family:Newsreader,Georgia,serif;font-size:56px;font-weight:300;line-height:.9;letter-spacing:-.04em">{{ t.countShown }}</span>
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu);text-align:right;max-width:55%">{{ t.altShown }}</span>
+        </div>
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+          <h3 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:22px;font-weight:400;letter-spacing:-.01em">{{ t.name }}</h3>
+          <p style="margin:0;font-size:13px;line-height:1.5;color:var(--mu);text-wrap:pretty">{{ t.summaryShown }}</p>
+        </div>
+      </button>
+    </sc-for>
+  </section>
+  <section style="display:grid;grid-template-columns:{{ heroCols }};gap:{{ heroGap }};padding-top:{{ sectionGap }};border-top:1px solid var(--ln)">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)"><span style="width:18px;height:1px;background:var(--ac)"></span>Weekly digest</div>
+      <div style="display:flex;flex-direction:column">
+        <sc-for list="{{ weeksFull }}" as="w" hint-placeholder-count="8">
+          <button onClick="{{ w.go }}" style="display:grid;grid-template-columns:70px 1fr auto;gap:12px;align-items:center;padding:10px 12px;margin:0 -12px;border:0;border-top:1px solid var(--ln);border-radius:10px;background:{{ w.rowBg }};text-align:left" style-hover="background:var(--sf)">
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:{{ w.labelColor }}">{{ w.label }}</span>
+            <span style="font-size:13px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.titles }}</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:{{ w.stateColor }}">{{ w.state }}</span>
+          </button>
+        </sc-for>
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mu);cursor:pointer">
+        <span onClick="{{ toggleMonday }}" style="width:34px;height:20px;border-radius:999px;background:{{ mondayBg }};position:relative;transition:background .2s;display:inline-block;flex:none">
+          <span style="position:absolute;top:2px;left:{{ mondayKnob }};width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span>
+        </span>Write one automatically every Monday
+      </label>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;padding:22px 24px;border-radius:18px;background:var(--sf);border:1px solid var(--ln)">
+      <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">{{ weekLabel }} · {{ weekCount }}</div>
+      <p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:21px;font-weight:300;line-height:1.4;white-space:pre-line;text-wrap:pretty">{{ digestText }}</p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:auto">
+        <button onClick="{{ genDigest }}" style="padding:8px 14px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px;display:flex;align-items:center;gap:8px">
+          <sc-if value="{{ digestBusy }}" hint-placeholder-val="{{ false }}"><span style="width:11px;height:11px;border:2px solid rgba(255,255,255,.3);border-top-color:var(--bg);border-radius:50%;animation:siftspin .8s linear infinite;display:inline-block"></span></sc-if>
+          <span>{{ digestBtn }}</span>
+        </button>
+        <span style="font-size:12px;color:var(--mu)">{{ digestNote }}</span>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isTodos }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ h1Size }};font-weight:300;letter-spacing:-.03em;line-height:1">{{ todoHeadline }}</h1>
+    <p style="margin:0;color:var(--mu);max-width:60ch">Pulled out of your notes. Send any of them to Weekly Focus. Sift suggests the item, you confirm. {{ vaultTodoNote }}</p>
+  </div>
+  <div style="display:flex;flex-direction:column;max-width:820px">
+    <sc-for list="{{ todosFlat }}" as="it" hint-placeholder-count="6">
+      <div style="display:flex;flex-direction:column;border-top:1px solid var(--ln)">
+        <div onClick="{{ it.toggle }}" style="display:grid;grid-template-columns:24px 1fr auto;gap:14px;align-items:start;padding:14px 12px;margin:0 -12px;border-radius:10px;cursor:pointer" style-hover="background:var(--sf)">
+          <span style="width:20px;height:20px;margin-top:2px;border-radius:50%;border:1.5px solid {{ it.boxBorder }};background:{{ it.boxBg }};display:grid;place-items:center;color:var(--bg);font-size:11px;transition:all .15s">{{ it.mark }}</span>
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+            <span style="font-family:Newsreader,Georgia,serif;font-size:18px;text-decoration:{{ it.deco }};color:{{ it.color }}">{{ it.text }}</span>
+            <button onClick="{{ it.open }}" style="border:0;background:transparent;padding:0;text-align:left;font-size:12px;color:var(--mu)" style-hover="color:var(--ac)">from {{ it.source }} · {{ it.date }}</button>
+          </div>
+          <sc-if value="{{ it.linked }}" hint-placeholder-val="{{ false }}">
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;padding:3px 8px;border-radius:999px;background:var(--acs);color:var(--ac);white-space:nowrap">WF · {{ it.linkKey }}</span>
+          </sc-if>
+          <sc-if value="{{ it.canSend }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ it.send }}" style="padding:4px 10px;border:1px solid var(--ln);border-radius:999px;background:transparent;font-size:12px;white-space:nowrap" style-hover="border-color:var(--ac);color:var(--ac)">→ Weekly Focus</button>
+          </sc-if>
+        </div>
+        <sc-if value="{{ it.sending }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px 38px;padding:12px 14px;border-radius:12px;background:var(--acs);animation:siftin .18s ease-out">
+            <span style="font-size:13px">Add to</span>
+            <select value="{{ sendItem }}" onChange="{{ setSendItem }}" style="padding:6px 10px;border:1px solid var(--ln);border-radius:8px;background:var(--sf);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px">
+              <sc-for list="{{ wfOptions }}" as="o" hint-placeholder-count="3"><option value="{{ o.key }}">{{ o.label }}</option></sc-for>
+            </select>
+            <span style="font-size:13px;color:var(--mu)">as {{ it.modeLabel }} · suggested</span>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              <button onClick="{{ cancelSend }}" style="padding:6px 12px;border:0;border-radius:999px;background:transparent;font-size:12px;color:var(--mu)">Cancel</button>
+              <button onClick="{{ confirmSend }}" style="padding:6px 14px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12px">Confirm</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isConflicts }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ h1Size }};font-weight:300;letter-spacing:-.03em;line-height:1">{{ conflictHeadline }}</h1>
+    <p style="margin:0;color:var(--mu);max-width:56ch">Takeout sometimes exports one note as both JSON and HTML. Notes that share most of their content are paired here.</p>
+  </div>
+  <section style="border:1px solid var(--ln);border-radius:18px;background:var(--sf);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--ln);flex-wrap:wrap">
+      <span style="font-family:Newsreader,Georgia,serif;font-size:40px;font-weight:300;letter-spacing:-.03em;line-height:1;color:var(--ac)">98%</span>
+      <div style="display:flex;flex-direction:column"><span style="font-family:Newsreader,Georgia,serif;font-size:19px">Gripper ECN application</span><span style="font-size:12px;color:var(--mu)">2 copies · differ by a trailing newline</span></div>
+      <div style="margin-left:auto;display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--bg);border:1px solid var(--ln)">
+        <button onClick="{{ modeReview }}" style="padding:5px 12px;border:0;border-radius:999px;background:{{ reviewBg }};color:{{ reviewColor }};font-size:12px">Review</button>
+        <button onClick="{{ modeMerge }}" style="padding:5px 12px;border:0;border-radius:999px;background:{{ mergeBg }};color:{{ mergeColor }};font-size:12px">Merge suggestion</button>
+      </div>
+    </div>
+    <sc-if value="{{ isReview }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:{{ pairCols }}">
+        <sc-for list="{{ conflictPair }}" as="cp" hint-placeholder-count="2">
+          <div style="padding:20px 22px;border-right:1px solid var(--ln);display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)"><span>{{ cp.file }}</span><span>{{ cp.date }}</span></div>
+            <pre style="margin:0;white-space:pre-wrap;font-family:Newsreader,Georgia,serif;font-size:16px;line-height:1.55">{{ cp.text }}</pre>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+              <sc-for list="{{ cp.facts }}" as="fc" hint-placeholder-count="2"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid var(--ln);color:var(--mu)">{{ fc }}</span></sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isMerge }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:20px 22px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:13px;color:var(--mu)">Keeps the pinned JSON copy, drops the duplicate, sorts the numbers so they're easier to check.</div>
+        <div style="padding:16px 18px;border-radius:14px;background:var(--acs);border:1px solid var(--ac)">
+          <div style="font-family:Newsreader,Georgia,serif;font-size:19px">Gripper ECN application</div>
+          <pre style="margin:6px 0 0;white-space:pre-wrap;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:1.7">13, 17, 25, 27, 28, 34, 35, 38, 41, 47, 48, 53, 54, 64, 68, 73, 76, 80, 82, 93, 100, 102, 107, 108, 109, 110, 111, 112, 113, 114</pre>
+        </div>
+      </div>
+    </sc-if>
+    <div style="display:flex;gap:8px;padding:14px 22px;border-top:1px solid var(--ln);flex-wrap:wrap;align-items:center">
+      <sc-if value="{{ unresolved }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ keepBoth }}" style="padding:8px 16px;border:1px solid var(--ln);border-radius:999px;background:transparent;font-size:13px" style-hover="border-color:var(--ac)">Keep both</button>
+        <button onClick="{{ doMerge }}" style="padding:8px 16px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px">Merge into one</button>
+      </sc-if>
+      <sc-if value="{{ resolved }}" hint-placeholder-val="{{ false }}">
+        <span style="color:var(--mu);font-size:13px">{{ resolvedMsg }}</span>
+        <button onClick="{{ undoResolve }}" style="border:0;background:transparent;color:var(--ac);padding:4px 8px;font-size:13px">Undo</button>
+      </sc-if>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isArchive }}" hint-placeholder-val="{{ false }}">
+  <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ h1Size }};font-weight:300;letter-spacing:-.03em;line-height:1">Archive</h1>
+  <sc-if value="{{ hasArchived }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;max-width:760px">
+      <sc-for list="{{ archived }}" as="n" hint-placeholder-count="1">
+        <button onClick="{{ n.open }}" style="display:grid;grid-template-columns:70px 1fr;gap:14px;padding:14px 12px;margin:0 -12px;border:0;border-top:1px solid var(--ln);border-radius:10px;background:transparent;text-align:left;opacity:.75" style-hover="background:var(--sf);opacity:1">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)">{{ n.dateShort }}</span>
+          <span style="font-family:Newsreader,Georgia,serif;font-size:18px">{{ n.title }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ noArchived }}" hint-placeholder-val="{{ true }}"><p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:300;font-style:italic;color:var(--mu)">Nothing archived yet.</p></sc-if>
+</sc-if>
+</main>
+
+<sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+  <nav style="position:sticky;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;margin:0 10px 12px;padding:4px;border-radius:999px;background:var(--ink);color:var(--bg);box-shadow:0 10px 30px rgba(0,0,0,.2)">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+      <button onClick="{{ n.go }}" style="padding:10px 2px;border:0;border-radius:999px;background:{{ n.mBg }};color:{{ n.mColor }};font-size:11px;min-height:44px">{{ n.label }}</button>
+    </sc-for>
+  </nav>
+</sc-if>
+
+<div style="position:fixed;left:50%;bottom:{{ barBottom }};transform:translateX(-50%);width:{{ barW }};z-index:45;display:flex;flex-direction:column;gap:8px;pointer-events:none">
+  <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+    <div style="align-self:center;pointer-events:auto;display:flex;align-items:center;gap:10px;padding:7px 7px 7px 16px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.2);animation:siftin .2s ease-out;max-width:100%">
+      <span style="width:8px;height:8px;border-radius:50%;background:{{ toast.color }};flex:none"></span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ toast.msg }}</span>
+      <button onClick="{{ toast.open }}" style="border:0;background:transparent;color:var(--bg);font-size:12px;padding:4px 8px;opacity:.75">Open</button>
+      <button onClick="{{ toast.undo }}" style="border:0;border-radius:999px;background:var(--bg);color:var(--ink);font-size:12px;padding:5px 12px">Undo</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{ capExpanded }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Live preview" style="pointer-events:auto;display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--ln);border-radius:18px;background:var(--sf);box-shadow:0 18px 50px rgba(0,0,0,.12);max-height:36vh;overflow:auto;animation:siftin .18s ease-out">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">Preview</span>
+        <button onPointerDown="{{ cycleTopic }}" title="Tap to change topic" style="display:flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--ln);border-radius:999px;background:var(--bg);font-size:12px" style-hover="border-color:var(--ac)">
+          <span style="width:7px;height:7px;border-radius:50%;background:{{ pvTopic.color }}"></span>{{ pvTopic.name }}<span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:9px;color:var(--ac)">{{ pvTopic.tag }}</span>
+        </button>
+        <sc-for list="{{ pvFlags }}" as="fl" hint-placeholder-count="0"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--ac);color:var(--acink)">{{ fl.t }}</span></sc-for>
+        <sc-if value="{{ pvShowList }}" hint-placeholder-val="{{ false }}">
+          <button onPointerDown="{{ toggleList }}" style="margin-left:auto;padding:3px 10px;border:1px solid {{ pvListBorder }};border-radius:999px;background:{{ pvListBg }};color:{{ pvListColor }};font-size:11px">{{ pvListLabel }}</button>
+        </sc-if>
+      </div>
+      <h3 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:21px;font-weight:400;letter-spacing:-.01em;line-height:1.2">{{ pvTitle }}</h3>
+      <sc-if value="{{ pvHasTags }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><sc-for list="{{ pvTags }}" as="tg" hint-placeholder-count="1"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;padding:2px 8px;border-radius:5px;background:var(--acs);color:var(--ac)">{{ tg.t }}</span></sc-for></div>
+      </sc-if>
+      <sc-if value="{{ pvHasTodos }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <sc-for list="{{ pvTodos }}" as="td" hint-placeholder-count="2"><div style="display:flex;gap:9px;align-items:center;font-size:14px"><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid var(--mu);flex:none"></span>{{ td.t }}</div></sc-for>
+          <sc-if value="{{ pvHasMore }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:var(--mu)">{{ pvMore }}</span></sc-if>
+        </div>
+      </sc-if>
+      <sc-if value="{{ pvHasLinks }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <sc-for list="{{ pvLinks }}" as="lk" hint-placeholder-count="1">
+            <div style="display:grid;grid-template-columns:36px 1fr;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--ln);border-radius:10px;background:var(--bg)">
+              <span style="width:36px;height:36px;border-radius:8px;background:{{ lk.bg }};color:#fff;display:grid;place-items:center;font-family:Newsreader,Georgia,serif;font-size:18px">{{ lk.letter }}</span>
+              <span style="display:flex;flex-direction:column;min-width:0"><span style="font-size:13px;font-weight:500">{{ lk.domain }}</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ lk.path }}</span></span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ pvHasImg }}" hint-placeholder-val="{{ false }}">
+        <div style="position:relative;align-self:flex-start">
+          <div role="img" aria-label="Pasted image" style="width:180px;height:120px;border-radius:10px;border:1px solid var(--ln);background:var(--bg) {{ capImgBg }} center/contain no-repeat"></div>
+          <button onPointerDown="{{ removeImg }}" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:13px;line-height:1">×</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ pvHasRelated }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--ln)">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin-right:2px">Links to</span>
+          <sc-for list="{{ pvRelated }}" as="r" hint-placeholder-count="2"><span style="display:flex;align-items:center;gap:6px;padding:3px 9px;border-radius:6px;background:var(--bg);font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.color }}"></span>{{ r.title }}<span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:var(--mu)">{{ r.pct }}</span></span></sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{ acOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="pointer-events:auto;align-self:flex-start;width:min(340px,100%);padding:6px;border:1px solid var(--ln);border-radius:14px;background:var(--sf);box-shadow:0 18px 50px rgba(0,0,0,.16);animation:siftin .14s ease-out">
+      <div style="padding:6px 10px 4px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">{{ acTitle }}</div>
+      <sc-for list="{{ acItems }}" as="a" hint-placeholder-count="4">
+        <button onPointerDown="{{ a.pick }}" style="width:100%;display:flex;align-items:center;gap:12px;padding:8px 10px;border:0;border-radius:9px;background:{{ a.bg }};text-align:left">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--ac);min-width:96px">{{ a.k }}</span><span style="font-size:13px;color:var(--mu)">{{ a.d }}</span>
+        </button>
+      </sc-for>
+      <div style="padding:6px 10px 2px;font-size:11px;color:var(--mu);border-top:1px solid var(--ln);margin-top:4px">↑↓ move · Enter pick · Esc close</div>
+    </div>
+  </sc-if>
+  <div style="pointer-events:auto;display:flex;flex-direction:column;border:1px solid {{ barBorder }};border-radius:24px;background:var(--sf);box-shadow:{{ barShadow }};transition:border-color .2s,box-shadow .2s">
+    <sc-if value="{{ showTemplates }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 14px 0">
+        <span style="font-size:12px;color:var(--mu);margin-right:2px">Start from</span>
+        <sc-for list="{{ templates }}" as="tp" hint-placeholder-count="4"><button onPointerDown="{{ tp.pick }}" style="padding:4px 11px;border:1px solid var(--ln);border-radius:999px;background:var(--bg);font-size:12px" style-hover="border-color:var(--ac);color:var(--ac)">{{ tp.label }}</button></sc-for>
+        <span style="font-size:12px;color:var(--mu);margin-left:auto">{{ barTips }}</span>
+      </div>
+    </sc-if>
+    <div style="display:flex;align-items:flex-end;gap:8px;padding:8px 8px 8px 18px">
+      <textarea ref="{{ capRef }}" value="{{ capText }}" rows="{{ capRows }}" onChange="{{ setCapText }}" onKeyDown="{{ capKey }}" onSelect="{{ capCaret }}" onFocus="{{ capFocusOn }}" onBlur="{{ capBlur }}" onPaste="{{ capPaste }}" placeholder="{{ barPlaceholder }}" style="flex:1;min-width:0;border:0;background:transparent;outline:none;resize:none;padding:8px 0;font-family:Newsreader,Georgia,serif;font-size:17px;line-height:1.45;max-height:40vh"></textarea>
+      <button onPointerDown="{{ micDown }}" title="{{ micLabel }}" style="width:38px;height:38px;flex:none;border-radius:50%;border:1px solid {{ micBorder }};background:{{ micBg }};color:{{ micColor }};display:grid;place-items:center">
+        <span style="width:9px;height:13px;border-radius:5px;border:1.5px solid currentColor;animation:{{ micAnim }}"></span>
+      </button>
+      <button onPointerDown="{{ saveDown }}" style="height:38px;flex:none;padding:0 16px;border-radius:999px;border:0;background:{{ saveBg }};color:{{ saveColor }};font-size:13px;transition:background .2s">Save</button>
+    </div>
+  </div>
+</div>
+
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeSel }}" style="position:fixed;inset:0;z-index:50;background:rgba(20,16,12,.38);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;justify-content:center;align-items:{{ sheetAlign }};padding:{{ sheetPad }};overflow:auto">
+    <section data-screen-label="Note" onClick="{{ stop }}" style="width:100%;max-width:720px;background:var(--sf);border-radius:{{ sheetRadius }};box-shadow:0 30px 80px rgba(0,0,0,.3);animation:siftin .22s ease-out;display:flex;flex-direction:column;max-height:{{ sheetMaxH }};overflow:auto">
+      <div style="display:flex;align-items:center;gap:8px;padding:14px 20px;border-bottom:1px solid var(--ln);position:sticky;top:0;background:var(--sf);z-index:1;flex-wrap:wrap">
+        <button onClick="{{ closeSel }}" style="border:0;background:transparent;padding:4px 8px;border-radius:6px;color:var(--mu);font-size:13px" style-hover="background:var(--sf2)">Esc · Close</button>
+        <span style="margin-left:auto;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)">{{ sel.dateLong }}</span>
+        <button onClick="{{ toggleVault }}" style="border:1px solid var(--ln);background:transparent;padding:4px 10px;border-radius:999px;font-size:12px;color:{{ vaultSelColor }}" style-hover="border-color:var(--ac)">{{ vaultSelLabel }}</button>
+        <button onClick="{{ togglePin }}" style="border:1px solid var(--ln);background:transparent;padding:4px 10px;border-radius:999px;font-size:12px;color:{{ pinColor }}" style-hover="border-color:var(--ac)">{{ pinLabel }}</button>
+        <button onClick="{{ toggleArchive }}" style="border:1px solid var(--ln);background:transparent;padding:4px 10px;border-radius:999px;font-size:12px" style-hover="border-color:var(--ac)">{{ archLabel }}</button>
+      </div>
+      <div style="padding:28px 28px 40px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <sc-for list="{{ sel.chips }}" as="ch" hint-placeholder-count="1"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:{{ ch.bg }};color:{{ ch.color }}">{{ ch.t }}</span></sc-for>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)">{{ sel.lang }} · {{ sel.file }}</span>
+          </div>
+          <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ sheetTitle }};font-weight:300;line-height:1.1;letter-spacing:-.03em;text-wrap:pretty">{{ sel.title }}</h2>
+        </div>
+        <section style="display:flex;flex-direction:column;gap:10px;padding:16px 18px;border-radius:14px;background:var(--bg);border-left:2px solid var(--ac)">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">
+            <span>Summary</span><span style="text-transform:none;letter-spacing:0">{{ summarySource }}</span>
+            <button onClick="{{ summarise }}" style="margin-left:auto;padding:5px 12px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-family:'Helvetica Neue',Helvetica,sans-serif;font-size:12px;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:6px">
+              <sc-if value="{{ sumBusy }}" hint-placeholder-val="{{ false }}"><span style="width:10px;height:10px;border:2px solid rgba(255,255,255,.3);border-top-color:var(--bg);border-radius:50%;animation:siftspin .8s linear infinite;display:inline-block"></span></sc-if>
+              <span>{{ sumBtn }}</span>
+            </button>
+          </div>
+          <p style="margin:0;font-size:15px;line-height:1.55;white-space:pre-line">{{ summaryEn }}</p>
+          <sc-if value="{{ hasOrigSummary }}" hint-placeholder-val="{{ false }}"><p style="margin:0;font-size:14px;line-height:1.75;color:var(--mu);border-top:1px solid var(--ln);padding-top:10px">{{ summaryOrig }}</p></sc-if>
+          <sc-if value="{{ hasSelTodos }}" hint-placeholder-val="{{ false }}">
+            <ul style="margin:0;padding:10px 0 0;list-style:none;border-top:1px solid var(--ln);display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ selTodos }}" as="it" hint-placeholder-count="1">
+                <li onClick="{{ it.toggle }}" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:14px">
+                  <span style="width:16px;height:16px;flex:none;margin-top:2px;border-radius:50%;border:1.5px solid {{ it.boxBorder }};background:{{ it.boxBg }};display:grid;place-items:center;color:var(--bg);font-size:9px">{{ it.mark }}</span>
+                  <span style="flex:1;text-decoration:{{ it.deco }};color:{{ it.color }}">{{ it.text }}</span>
+                  <sc-if value="{{ it.linked }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:var(--ac)">WF</span></sc-if>
+                </li>
+              </sc-for>
+            </ul>
+          </sc-if>
+        </section>
+        <sc-if value="{{ hasRelated }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">Related by relevance</div>
+            <div style="display:flex;flex-direction:column">
+              <sc-for list="{{ related }}" as="r" hint-placeholder-count="2">
+                <button onClick="{{ r.open }}" style="display:grid;grid-template-columns:10px 1fr 90px auto;gap:12px;align-items:center;padding:9px 10px;margin:0 -10px;border:0;border-top:1px solid var(--ln);border-radius:8px;background:transparent;text-align:left" style-hover="background:var(--sf2)">
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ r.color }}"></span>
+                  <span style="font-family:Newsreader,Georgia,serif;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</span>
+                  <span style="height:3px;border-radius:2px;background:var(--sf2);overflow:hidden"><span style="display:block;height:100%;width:{{ r.pct }};background:var(--ac)"></span></span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--mu)">{{ r.pct }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ selHasImg }}" hint-placeholder-val="{{ false }}"><div role="img" aria-label="Attached image" style="width:100%;height:300px;border-radius:14px;border:1px solid var(--ln);background:var(--bg) {{ selImgBg }} center/contain no-repeat"></div></sc-if>
+        <pre style="margin:0;white-space:pre-wrap;font-family:Newsreader,Georgia,serif;font-size:18px;line-height:1.65;text-wrap:pretty">{{ sel.text }}</pre>
+        <sc-if value="{{ selHasConflict }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ goConflicts }}" style="align-self:flex-start;padding:8px 14px;border:1px solid var(--ac);border-radius:999px;background:var(--acs);color:var(--ac);font-size:12px">A near-duplicate exists → review</button>
+        </sc-if>
+      </div>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ pinOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closePin }}" style="position:fixed;inset:0;z-index:70;background:rgba(20,16,12,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:grid;place-items:center;padding:20px">
+    <section data-screen-label="Vault PIN" onClick="{{ stop }}" style="width:100%;max-width:320px;background:var(--sf);border-radius:24px;padding:28px 24px 22px;display:flex;flex-direction:column;align-items:center;gap:20px;box-shadow:0 30px 80px rgba(0,0,0,.35);animation:siftin .2s ease-out">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)">Vault</span>
+        <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:400;letter-spacing:-.02em">{{ pinPrompt }}</h2>
+      </div>
+      <div style="display:flex;gap:14px;animation:{{ pinShake }}">
+        <sc-for list="{{ pinDots }}" as="d" hint-placeholder-count="4"><span style="width:13px;height:13px;border-radius:50%;border:1.5px solid {{ d.border }};background:{{ d.bg }};transition:background .12s"></span></sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,64px);gap:10px">
+        <sc-for list="{{ keypad }}" as="k" hint-placeholder-count="12">
+          <button onClick="{{ k.press }}" style="height:64px;border-radius:50%;border:1px solid {{ k.border }};background:{{ k.bg }};font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:300;visibility:{{ k.vis }}" style-active="background:var(--acs)">{{ k.label }}</button>
+        </sc-for>
+      </div>
+      <span style="font-size:12px;color:var(--mu)">Demo PIN 0000 · or type on keyboard</span>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ ambient }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Ambient" onClick="{{ exitAmbient }}" style="position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;justify-content:center;padding:{{ ambPad }};cursor:pointer">
+    <div style="max-width:900px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:22px;opacity:{{ ambOpacity }};transform:{{ ambShift }};transition:opacity .6s,transform .6s">
+      <div style="display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">
+        <span style="width:10px;height:10px;border-radius:50%;background:{{ amb.color }}"></span><span>{{ amb.ago }}</span><span>·</span><span>{{ amb.topic }}</span>
+      </div>
+      <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ ambTitle }};font-weight:300;line-height:1.05;letter-spacing:-.035em;text-wrap:balance">{{ amb.title }}</h1>
+      <p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:{{ ambBody }};font-weight:300;line-height:1.45;color:var(--mu);max-width:42ch;text-wrap:pretty">{{ amb.sum }}</p>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:28px;display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div style="width:160px;height:2px;border-radius:1px;background:var(--sf2);overflow:hidden"><div style="height:100%;width:{{ ambProgress }};background:var(--ac);transition:width 1s linear"></div></div>
+      <span style="font-size:12px;color:var(--mu)">Tap or press any key to return · Space for next</span>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ importOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeImport }}" style="position:fixed;inset:0;background:rgba(20,16,12,.45);z-index:60;display:grid;place-items:center;padding:20px">
+    <div onClick="{{ stop }}" style="width:100%;max-width:460px;background:var(--sf);border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:siftin .2s ease-out">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:400;letter-spacing:-.02em">Import from Google Takeout</h2>
+        <button onClick="{{ closeImport }}" style="border:0;background:transparent;color:var(--mu);font-size:18px;line-height:1">×</button>
+      </div>
+      <sc-if value="{{ importIdle }}" hint-placeholder-val="{{ true }}">
+        <ol style="margin:0;padding-left:18px;color:var(--mu);font-size:13px;line-height:1.7">
+          <li>takeout.google.com → Deselect all → tick <b style="color:var(--ink)">Keep</b></li>
+          <li>Create export, download the zip</li>
+          <li>Drop the zip or the <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px">Takeout/Keep</span> folder below</li>
+        </ol>
+        <button onClick="{{ startImport }}" style="border:1.5px dashed var(--ln);border-radius:14px;padding:34px 20px;background:var(--bg);display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--mu)" style-hover="border-color:var(--ac);color:var(--ac)">
+          <span style="font-family:Newsreader,Georgia,serif;font-size:18px;color:var(--ink)">Drop files here</span>
+          <span style="font-size:12px">.zip · .json · .html · images</span>
+        </button>
+      </sc-if>
+      <sc-if value="{{ importRunning }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;font-size:13px"><span>{{ importStage }}</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--mu)">{{ importPctLabel }}</span></div>
+          <div style="height:4px;border-radius:2px;background:var(--sf2);overflow:hidden"><div style="height:100%;width:{{ importPctLabel }};background:var(--ac);transition:width .25s"></div></div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ importDone }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+          <sc-for list="{{ importStats }}" as="s" hint-placeholder-count="4">
+            <div style="padding:12px 14px;border:1px solid var(--ln);border-radius:12px"><div style="font-family:Newsreader,Georgia,serif;font-size:30px;font-weight:300">{{ s.v }}</div><div style="font-size:12px;color:var(--mu)">{{ s.k }}</div></div>
+          </sc-for>
+        </div>
+        <button onClick="{{ closeImport }}" style="padding:10px 14px;border:0;border-radius:999px;background:var(--ink);color:var(--bg)">Open the stream</button>
+      </sc-if>
+    </div>
+  </div>
+</sc-if>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;desktop&quot;,&quot;mobile&quot;],&quot;default&quot;:&quot;desktop&quot;,&quot;tsType&quot;:&quot;'desktop'|'mobile'&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;liveAi&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Summaries&quot;},&quot;idleSeconds&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:60,&quot;min&quot;:0,&quot;max&quot;:600,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Ambient&quot;},&quot;ambientSeconds&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:20,&quot;min&quot;:5,&quot;max&quot;:120,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Ambient&quot;},&quot;vaultPin&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;0000&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Vault&quot;}}">
+const D=()=>window.SIFT_DATA||{NOTES:[],THEMES:[],WEEKS:[{id:'w5',label:'',notes:[],digest:null}],WF:{meta:{},items:[]}};
+const LIGHT={bg:'#F4F0E8',sf:'#FBF9F4',sf2:'#ECE6DA',ink:'#221E1A',mu:'#6E665E',ln:'rgba(34,30,26,.12)',ac:'#8E5FC0',acs:'rgba(142,95,192,.13)',acink:'#FFFFFF'};
+const DARK={bg:'#161311',sf:'#1F1B18',sf2:'#2A2521',ink:'#EFE8DC',mu:'#9F958A',ln:'rgba(239,232,220,.12)',ac:'#B892E3',acs:'rgba(184,146,227,.16)',acink:'#161311'};
+const HUE={eng:300,soft:230,lang:160,refl:55,career:20,scrap:null};
+const themeColor=(id,dark)=>HUE[id]==null?(dark?'#8A8078':'#9A9087'):`oklch(${dark?0.74:0.6} 0.13 ${HUE[id]})`;
+const grams=t=>{const m=new Map();const s=t.toLowerCase().replace(/\s+/g,' ');for(let i=0;i<s.length-2;i++){const g=s.slice(i,i+3);m.set(g,(m.get(g)||0)+1);}return m;};
+const cosine=(a,b)=>{let d=0,na=0,nb=0;a.forEach((v,k)=>{na+=v*v;const w=b.get(k);if(w)d+=v*w;});b.forEach(v=>nb+=v*v);return na&&nb?d/Math.sqrt(na*nb):0;};
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const fmtLong=ts=>new Date(ts).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'long',year:'numeric'});
+const fmtShort=ts=>new Date(ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+const ago=ts=>{const d=Math.round((Date.now()-ts)/864e5);if(d<1)return 'today';if(d<45)return d+' days ago';const m=Math.round(d/30.4);return m<12?m+(m===1?' month ago':' months ago'):Math.round(m/12)+' yr ago';};
+const PIN='0000';
+const PREFIX={eng:'office:',soft:'app:',lang:'study:'};
+const LIST_RE=/^(?:[-*•·]\s+(?:\[[ x]?\]\s*)?|\[[ x]?\]\s*|\d+[.)]\s+)/i;
+const isChecklist=t=>{const ls=t.split('\n').map(l=>l.trim()).filter(Boolean);const m=ls.filter(l=>LIST_RE.test(l));return m.length>=2&&m.length>=ls.length-1;};
+const listItems=t=>t.split('\n').map(l=>l.trim()).filter(l=>LIST_RE.test(l)).map(l=>l.replace(LIST_RE,'')).filter(Boolean);
+const detectLang=t=>/[\u3040-\u30ff\u4e00-\u9fff]/.test(t)?'JA':/[\u0900-\u097F]/.test(t)?'MR':/[\u1000-\u109F]/.test(t)?'MY':'EN';
+const VOICE_DEMO='Ask Ito about the gripper ECN list before Friday';
+const TAGS={eng:'engineering',soft:'software',lang:'language',refl:'reflection',career:'career',scrap:'scraps'};
+const TAG_TO_THEME=Object.fromEntries(Object.entries(TAGS).map(([k,v])=>[v,k]));
+const TEMPLATES={meeting:()=>'Meeting — \nWith @\n\nNotes\n- \n\nActions\n- [ ] ',idea:()=>'Idea: \nWhy it matters: \nFirst step\n- [ ] ',journal:()=>'Journal · '+new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'\n\n',list:()=>'List\n- [ ] \n- [ ] \n- [ ] '};
+const SLASH=[{k:'/todo',d:'Add a checkbox line'},{k:'/pin',d:'Pin this note',flag:'pin'},{k:'/vault',d:'Keep it in the vault',flag:'vault'},{k:'/wf',d:'Send to-dos to Weekly Focus',flag:'wf'},{k:'/meeting',d:'Meeting template'},{k:'/idea',d:'Idea template'},{k:'/journal',d:'Journal entry'},{k:'/list',d:'Checklist template'}];
+const BASE_CTX=['@train','@desk','@deep-work','@keyboard','@phone-only','@needs-claude-code','@home','@office'];
+const LINK_HUES=[300,230,160,55,20];
+const parseDraft=(text,asList)=>{ const tags=[...text.matchAll(/(^|\s)#([\w-]+)/g)].map(m=>m[2]);
+  const themeFromTag=tags.map(t=>TAG_TO_THEME[t.toLowerCase()]).find(Boolean)||null; const labels=[...new Set(tags.filter(t=>!TAG_TO_THEME[t.toLowerCase()]))];
+  const ctx=[...new Set([...text.matchAll(/(^|\s)(@[\w-]+)/g)].map(m=>m[2]))];
+  const links=[...text.matchAll(/https?:\/\/[^\s]+/g)].map(m=>{ try{ const u=new URL(m[0]); return {domain:u.hostname.replace(/^www\./,''),path:(u.pathname+u.search).slice(0,48)||'/'}; }catch(e){ return null; } }).filter(Boolean);
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean); const detected=isChecklist(text); const list=asList ?? detected;
+  const todos=list?listItems(text):lines.filter(l=>/^(?:[-*]\s+)?\[[ x]?\]/i.test(l)).map(l=>l.replace(LIST_RE,'')).filter(Boolean);
+  const first=lines[0]||''; const clean=first.replace(/(^|\s)[#@][\w-]+/g,'').trim();
+  const title=!first?'Untitled':LIST_RE.test(first)?'List · '+todos.length+' items':(clean||first).slice(0,70);
+  return {themeFromTag,labels,ctx,links,todos,list,detected,title}; };
+
+class Component extends DCLogic {
+  state = { view:'stream', sel:null, q:'', dark:null, filter:'all', done:{}, pins:{}, arch:{}, extra:[], week:'w5', mondayAuto:true, aiSum:{}, aiDigest:{}, busySum:false, busyDigest:false, cMode:'review', resolvedAs:null, importStep:-1, importPct:0, hover:null,
+    opened:{}, resIdx:Math.floor(Math.random()*5), resFade:false, ambient:false, ambIdx:0, ambFade:false, ambTick:0,
+    capOpen:false, capText:'', capList:null, capTheme:null, listening:false, mapDraft:'',
+    vaultMarks:{}, unvault:{}, unlocked:false, pinOpen:false, pin:'', pinErr:false, afterUnlock:null,
+    wfDone:{}, wfAdded:{}, links:{}, sendFor:null, sendItem:null, syncedAt:Date.now(), tick:0,
+    capFocus:false, caret:0, acIdx:0, acDismiss:false, capFlags:{}, capImg:null, toast:null, mapPos:{}, zoom:1, pan:{x:0,y:0}, mapTopic:null, dragging:null };
+  componentDidMount(){
+    if(!window.SIFT_DATA){ this._poll=setInterval(()=>{ if(window.SIFT_DATA){ clearInterval(this._poll); this._key=null; this.forceUpdate(); } },80); }
+    this._last=Date.now();
+    this._act=()=>{ this._last=Date.now(); };
+    ['mousemove','pointerdown','keydown','scroll','touchstart'].forEach(e=>window.addEventListener(e,this._act,{passive:true,capture:true}));
+    this._k=e=>this.onGlobalKey(e); window.addEventListener('keydown',this._k);
+    this._sec=setInterval(()=>{
+      const s=this.state, idle=this.props.idleSeconds ?? 60, per=this.props.ambientSeconds ?? 20;
+      if(s.ambient){ const t=s.ambTick+1; if(t>=per){ this.rotate('amb'); this.setState({ambTick:0}); } else this.setState({ambTick:t}); }
+      else if(idle>0 && Date.now()-this._last>idle*1000 && !s.capFocus && !s.pinOpen && !s.sel && !s.dragging && this.ambientPool().length) this.setState({ambient:true,ambTick:0});
+      this.setState(st=>({tick:st.tick+1}));
+      if(this.state.tick%9===0 && !s.ambient) this.rotate('res');
+    },1000);
+  }
+  componentWillUnmount(){ ['mousemove','pointerdown','keydown','scroll','touchstart'].forEach(e=>window.removeEventListener(e,this._act,{capture:true})); window.removeEventListener('keydown',this._k); clearInterval(this._sec); clearInterval(this._poll); clearInterval(this._t); clearInterval(this._voice); try{this._rec&&this._rec.stop();}catch(e){} }
+  rotate(kind){ this.setState({[kind+'Fade']:true}); setTimeout(()=>this.setState(s=>({[kind+'Idx']:s[kind+'Idx']+1,[kind+'Fade']:false})),480); }
+  onGlobalKey(e){
+    const s=this.state, tag=(e.target&&e.target.tagName)||'';
+    if(s.ambient){ e.preventDefault(); if(e.key===' '){ this.rotate('amb'); this.setState({ambTick:0}); } else this.setState({ambient:false}); return; }
+    if(s.pinOpen){ if(/^\d$/.test(e.key)) this.pressPin(e.key); else if(e.key==='Backspace') this.setState(st=>({pin:st.pin.slice(0,-1)})); else if(e.key==='Escape') this.setState({pinOpen:false,pin:''}); return; }
+    if(e.key==='Escape'){ this.setState({sel:null,q:'',sendFor:null}); return; }
+    if((e.key==='n'||e.key==='N') && !e.metaKey && !e.ctrlKey && !/INPUT|TEXTAREA|SELECT/.test(tag) && !s.sel){ e.preventDefault(); this.openCapture(); }
+  }
+  openCapture(){ this.setState({sel:null}); setTimeout(()=>{ const el=this._capEl; if(el){ el.focus(); const L=el.value.length; el.setSelectionRange(L,L); } },30); }
+  capRef = el => { this._capEl = el; };
+  mapRef = el => { if(this._mapEl===el) return; if(this._mapEl&&this._wheel) this._mapEl.removeEventListener('wheel',this._wheel); this._mapEl=el;
+    if(el){ this._wheel=e=>{ if(!(e.ctrlKey||e.metaKey)) return; e.preventDefault(); this.setState(s=>({zoom:Math.min(2.5,Math.max(0.6,s.zoom*(e.deltaY<0?1.08:1/1.08)))})); }; el.addEventListener('wheel',this._wheel,{passive:false}); } };
+  nodeDown(e,id){ e.stopPropagation(); if(e.button>0) return; const el=this._mapEl; if(!el) return; const r=el.getBoundingClientRect(), z=this.state.zoom, base={...((this._pos&&this._pos[id])||{x:50,y:31.25})}, sx=e.clientX, sy=e.clientY; let moved=false;
+    const mv=ev=>{ const dx=ev.clientX-sx, dy=ev.clientY-sy; if(!moved&&Math.hypot(dx,dy)<4) return; moved=true; const nx=Math.min(97,Math.max(3,base.x+dx/(r.width*z)*100)), ny=Math.min(60,Math.max(2.5,base.y+dy/(r.height*z)*62.5)); this.setState(s=>({dragging:id,mapPos:{...s.mapPos,[id]:{x:nx,y:ny}}})); };
+    const up=()=>{ window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up); this.setState({dragging:null}); if(!moved) this.openNote(id); };
+    window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up); }
+  bgDown(e){ if(e.button>0) return; const sx=e.clientX, sy=e.clientY, base={...this.state.pan};
+    const mv=ev=>this.setState({dragging:'bg',pan:{x:base.x+ev.clientX-sx,y:base.y+ev.clientY-sy}});
+    const up=()=>{ window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up); this.setState({dragging:null}); };
+    window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up); }
+  undoNote(id){ this.setState(st=>{ const wfAdded={}; Object.keys(st.wfAdded).forEach(k=>wfAdded[k]=st.wfAdded[k].filter(x=>!(x.src||'').startsWith('sift:'+id+'#'))); const links={}; Object.keys(st.links).forEach(k=>{ if(!k.startsWith(id+'#')) links[k]=st.links[k]; }); const vm={...st.vaultMarks}; delete vm[id];
+    return {extra:st.extra.filter(m=>m.id!==id),wfAdded,links,vaultMarks:vm,toast:st.toast&&st.toast.id===id?null:st.toast,placed:st.placed===id?null:st.placed,hover:null}; }); }
+  saveBar(){ const s=this.state; const n=this.saveNote(s.capText,{theme:s.capTheme,asList:s.capList,flags:s.capFlags,img:s.capImg}); if(!n) return;
+    const tn=(D().THEMES.find(t=>t.id===n.theme)||{name:'Scraps'}).name; const bits=['Saved to '+tn]; if(s.capFlags.pin) bits.push('pinned'); if(s.capFlags.vault) bits.push('in vault'); if(n._wfItem) bits.push(n.todos.length+' to-do'+(n.todos.length===1?'':'s')+' → '+n._wfItem); else if(n.todos.length) bits.push(n.todos.length+' to-do'+(n.todos.length===1?'':'s'));
+    clearInterval(this._voice); try{this._rec&&this._rec.stop();}catch(e){}
+    this.setState({capText:'',caret:0,capFlags:{},capTheme:null,capList:null,capImg:null,listening:false,acDismiss:false,toast:{id:n.id,msg:bits.join(' · '),theme:n.theme}});
+    clearTimeout(this._toastT); this._toastT=setTimeout(()=>this.setState({toast:null}),6500); }
+  applyAc(ac,item){ const s=this.state, caret=Math.min(s.caret,s.capText.length), start=caret-ac.tok.length; let text=s.capText.slice(0,start), after=s.capText.slice(caret), flags={...s.capFlags}, theme=s.capTheme, pos;
+    if(ac.kind==='/'){ const k=item.k.slice(1); if(k==='todo'){ text+='- [ ] '; pos=text.length; } else if(TEMPLATES[k]){ const tpl=TEMPLATES[k](); if(!(text+after).trim()){ text=tpl; after=''; pos=k==='journal'?tpl.length:tpl.indexOf('\n'); } else { text+=tpl; pos=text.length; } } else { flags[item.flag]=!flags[item.flag]; pos=text.length; } }
+    else { text+=item.k+' '; if(item.theme) theme=item.theme; pos=text.length; }
+    this.setState({capText:text+after,capFlags:flags,capTheme:theme,caret:pos,acIdx:0},()=>{ const el=this._capEl; if(el){ el.focus(); el.setSelectionRange(pos,pos); } }); }
+  isVault(n){ const s=this.state; return !!((s.vaultMarks[n.id]||n.private||n.theme==='career') && !s.unvault[n.id]); }
+  allNotes(){ const s=this.state; return [...s.extra, ...D().NOTES].map(n=>{ const m={...n, pinned:s.pins[n.id] ?? n.pinned, archived:!!s.arch[n.id]}; m.vault=this.isVault(m); m.hidden=m.vault&&!s.unlocked; return m; }); }
+  ensureIdx(){ const all=[...this.state.extra, ...D().NOTES]; const key=all.map(n=>n.id).join('|'); if(this._key===key) return; this._key=key; const df=new Map(); this._g={};
+    all.forEach(n=>{ const g=grams(n.title+' '+n.text+' '+(n.labels||[]).join(' ')); this._g[n.id]=g; g.forEach((v,k)=>df.set(k,(df.get(k)||0)+1)); });
+    this._df=df; this._N=all.length; this._w={}; all.forEach(n=>this._w[n.id]=this.weigh(this._g[n.id])); }
+  weigh(g){ const w=new Map(),N=this._N||1; g.forEach((v,k)=>{ const d=this._df.get(k)||0; if(d/N>0.5) return; w.set(k,(1+Math.log(v))*Math.log((N+1)/(d+0.5))); }); return w; }
+  simOf(a,b){ this.ensureIdx(); return cosine(this._w[a.id]||new Map(),this._w[b.id]||new Map()); }
+  simText(t,n){ this.ensureIdx(); return cosine(this.weigh(grams(t)),this._w[n.id]||new Map()); }
+  ambientPool(){ const s=this.state; return this.allNotes().filter(n=>!n.hidden&&!n.archived&&n.text.length>12).sort((a,b)=>((s.opened[a.id]?1:0)-(s.opened[b.id]?1:0))||(a.ts-b.ts)); }
+  openNote(id){ this.setState(st=>({sel:id,opened:{...st.opened,[id]:true},q:''})); }
+  pressPin(d){
+    const s=this.state; if(s.pin.length>=4) return; const pin=s.pin+d; this.setState({pin,pinErr:false});
+    if(pin.length===4){ setTimeout(()=>{ if(pin===(this.props.vaultPin ?? PIN)){ const after=this.state.afterUnlock; this.setState({unlocked:true,pinOpen:false,pin:'',afterUnlock:null}); if(after) this.openNote(after); } else { this.setState({pinErr:true}); setTimeout(()=>this.setState({pin:'',pinErr:false}),450); } },120); }
+  }
+  suggestFor(text){ const all=this.allNotes().filter(n=>!n.hidden&&!n.archived); if(text.trim().length<6) return {theme:null,related:[]};
+    const scored=all.map(n=>({n,sim:this.simText(text,n)})).sort((a,b)=>b.sim-a.sim);
+    const best=scored[0]&&scored[0].sim>0.06?scored[0].n.theme:null;
+    return {theme:best, related:scored.filter(x=>x.sim>0.06).slice(0,3)}; }
+  saveNote(text, o={}){
+    const t=text.trim(); if(!t) return null; const pd=parseDraft(t,o.asList); const sug=this.suggestFor(t); const f=o.flags||{};
+    const theme=o.theme||pd.themeFromTag||sug.theme||'scrap';
+    const n={id:'x'+Date.now(),title:pd.title,file:'captured in Sift',lang:detectLang(t),ts:Date.now(),pinned:!!f.pin,theme,labels:pd.labels,ctx:pd.ctx,img:o.img||null,text:t,sum:pd.list&&pd.todos.length?'A checklist of '+pd.todos.length+' items.':'Captured just now. Summarise to get the gist.',todos:pd.todos};
+    const item=f.wf&&n.todos.length?this.suggestItem(n):null; n._wfItem=item;
+    this.setState(st=>{ const out={extra:[n,...st.extra]}; if(f.vault) out.vaultMarks={...st.vaultMarks,[n.id]:true};
+      if(item){ const add=n.todos.map((tt,i)=>({id:'s_'+Math.random().toString(36).slice(2,6),t:tt,done:false,del:false,when:'',md:theme==='eng'?'o':'p',urg:false,dl:false,loc:'',tag:'',ctx:pd.ctx,lat:false,rv:'',src:'sift:'+n.id+'#'+i,u:Date.now()}));
+        out.wfAdded={...st.wfAdded,[item]:[...(st.wfAdded[item]||[]),...add]}; out.links={...st.links}; add.forEach((a,i)=>{ out.links[n.id+'#'+i]=item; }); out.syncedAt=Date.now(); }
+      return out; });
+    return n;
+  }
+  toggleVoice(){
+    const s=this.state; if(s.listening){ try{this._rec&&this._rec.stop();}catch(e){} clearInterval(this._voice); this.setState({listening:false}); return; }
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition; const base=s.capText?s.capText.replace(/\s*$/,'\n'):'';
+    const simulate=()=>{ let i=0; clearInterval(this._voice); this.setState({listening:true}); this._voice=setInterval(()=>{ i+=2; this.setState({capText:base+VOICE_DEMO.slice(0,i)}); if(i>=VOICE_DEMO.length){ clearInterval(this._voice); this.setState({listening:false}); } },45); };
+    if(!SR){ simulate(); return; }
+    try{ const r=new SR(); this._rec=r; r.interimResults=true; r.continuous=true; r.lang=navigator.language||'en-US';
+      r.onresult=ev=>{ let txt=''; for(let i=0;i<ev.results.length;i++) txt+=ev.results[i][0].transcript; this.setState({capText:base+txt}); };
+      r.onerror=()=>{ this._rec=null; simulate(); }; r.onend=()=>{ if(this._rec===r) this.setState({listening:false}); };
+      r.start(); this.setState({listening:true}); }catch(e){ simulate(); }
+  }
+  wfItems(){ const s=this.state; return D().WF.items.map(it=>({...it, subtasks:[...it.subtasks, ...(s.wfAdded[it.key]||[])]})); }
+  subDone(st){ const s=this.state; return st.src&&st.src.startsWith('sift:') ? !!s.done[st.src.slice(5)] : (s.wfDone[st.id] ?? st.done); }
+  suggestItem(n){ const items=this.wfItems().filter(i=>i.active); const pre=PREFIX[n.theme]; const hit=pre&&items.find(i=>i.key.startsWith(pre)); return (hit||items.find(i=>i.key.startsWith('app:'))||items[0]||{}).key; }
+  async summarise(n){
+    if(this.state.busySum) return; const live=(this.props.liveAi ?? true)&&window.claude&&window.claude.complete; this.setState({busySum:true});
+    try{ let txt; if(live) txt=await window.claude.complete({messages:[{role:'user',content:`Summarise this personal note in 1–2 plain English sentences. If the note is not in English, add a second line with the same summary in the note's language. No preamble.\n\n${n.text}`}]});
+      else { await new Promise(r=>setTimeout(r,900)); txt=n.sum+(n.sumOrig?'\n'+n.sumOrig:''); }
+      this.setState(s=>({aiSum:{...s.aiSum,[n.id]:txt.trim()}})); }catch(e){ this.setState(s=>({aiSum:{...s.aiSum,[n.id]:n.sum}})); }
+    this.setState({busySum:false});
+  }
+  async genDigest(w,wfLine){
+    if(this.state.busyDigest) return; const live=(this.props.liveAi ?? true)&&window.claude&&window.claude.complete;
+    const notes=this.allNotes().filter(n=>w.notes.includes(n.id)&&!n.hidden); this.setState({busyDigest:true});
+    try{ let txt; if(live) txt=await window.claude.complete({messages:[{role:'user',content:`Write a short weekly digest (2–3 sentences, calm and specific, plain English, no headings, no preamble) of these notes from the week of ${w.label} 2026. Also mention this planner status in one clause: "${wfLine}".\n\n${notes.map(n=>'---\n'+n.text).join('\n')}`}]});
+      else { await new Promise(r=>setTimeout(r,1000)); txt=(notes.length?notes.map(n=>n.sum).join(' '):'No readable notes this week.')+' '+wfLine+'.'; }
+      this.setState(s=>({aiDigest:{...s.aiDigest,[w.id]:txt.trim()}})); }catch(e){ this.setState(s=>({aiDigest:{...s.aiDigest,[w.id]:notes.map(n=>n.sum).join(' ')}})); }
+    this.setState({busyDigest:false});
+  }
+  startImport(){ this.setState({importStep:0,importPct:0}); clearInterval(this._t); this._t=setInterval(()=>this.setState(s=>{ const p=Math.min(100,s.importPct+4+Math.random()*9); if(p>=100){clearInterval(this._t);return {importPct:100,importStep:1};} return {importPct:p}; }),160); }
+  go(view){ this.setState({view,sel:null,q:'',sendFor:null,placed:null}); }
+  renderVals(){
+    const s=this.state, p=this.props, {THEMES,WEEKS,WF}=D();
+    const dark=s.dark ?? ((p.theme ?? 'light')==='dark'); const c=dark?DARK:LIGHT;
+    const isMobile=(p.device ?? 'desktop')==='mobile', isDesktop=!isMobile;
+    const all=this.allNotes(), active=all.filter(n=>!n.archived), open=active.filter(n=>!n.hidden);
+    const isCmd=s.q.startsWith('/'), q=isCmd?'':s.q.trim().toLowerCase();
+    const matchQ=n=>!q||(n.title+' '+n.text+' '+n.sum+' '+(n.sumOrig||'')).toLowerCase().includes(q);
+    const matchF=n=>s.filter==='all'||n.theme===s.filter||(n.labels||[]).includes(s.filter);
+    const visible=active.filter(n=>(n.hidden?!q:matchQ(n))&&matchF(n)).sort((a,b)=>b.ts-a.ts);
+    const chipOf=(t,strong)=>({t,bg:strong?c.ac:c.acs,color:strong?c.acink:c.ac});
+    const askPin=after=>this.setState({pinOpen:true,pin:'',pinErr:false,afterUnlock:after||null});
+    const card=n=>{ const d=new Date(n.ts), wc=n.text.trim().split(/\s+/).length;
+      return {...n, day:d.getDate(), dow:DOW[d.getDay()], dateShort:fmtShort(n.ts),
+        title:n.hidden?'Locked note':n.title, titleColor:n.hidden?c.mu:c.ink, titleStyle:n.hidden?'italic':'normal',
+        sumShown:n.hidden?'In your vault. Enter your PIN to read it.':n.sum, langShown:n.hidden?'VAULT':n.lang, wcShown:n.hidden?'':(wc<2?'1 line':wc+' words'),
+        hasTodos:!n.hidden&&n.todos.length>0, todoLabel:n.todos.length+(n.todos.length===1?' to-do':' to-dos'),
+        chips:[...(n.vault?[chipOf(s.unlocked?'Vault · open':'Vault',!s.unlocked)]:[]), ...(n.conflict&&!s.resolvedAs?[chipOf('Conflict',true)]:[]), ...(n.hidden?[]:(n.labels||[]).map(l=>chipOf(l,false)))],
+        open:e=>{ e&&e.stopPropagation&&e.stopPropagation(); n.hidden?askPin(n.id):this.openNote(n.id); }}; };
+    const months=[]; visible.forEach(n=>{ const d=new Date(n.ts), key=d.getFullYear()+'-'+d.getMonth(); let m=months.find(x=>x.key===key); if(!m){m={key,label:MONTHS[d.getMonth()],year:d.getFullYear(),rows:[]};months.push(m);} m.rows.push(card(n)); });
+    months.forEach(m=>m.count=m.rows.length+(m.rows.length===1?' note':' notes'));
+    // Weekly Focus
+    const items=this.wfItems(); let wfTotal=0,wfDoneN=0,parked=0,linkedN=0;
+    const wfItemsV=items.map(it=>{ const subs=it.subtasks.filter(st=>!st.del&&!st.lat); parked+=it.subtasks.filter(st=>st.lat&&!st.del).length;
+      const rows=subs.map(st=>{ const d=this.subDone(st); wfTotal++; if(d) wfDoneN++; const fromSift=!!(st.src&&st.src.startsWith('sift:')); if(fromSift) linkedN++;
+        const nid=fromSift?st.src.slice(5).split('#')[0]:null; const note=nid&&all.find(n=>n.id===nid);
+        const badges=[...(st.when?[{t:new Date(st.when+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric'}),bg:c.sf2,color:c.mu}]:[]), {t:st.md==='o'?'office':st.md==='b'?'both':'personal',bg:c.sf2,color:c.mu}, ...(st.urg?[{t:'urgent',bg:c.ac,color:c.acink}]:[]), ...(st.dl?[{t:'deadline',bg:c.acs,color:c.ac}]:[]), ...(st.ctx||[]).map(x=>({t:x,bg:'transparent',color:c.mu}))];
+        return {...st, mark:d?'✓':'', deco:d?'line-through':'none', color:d?c.mu:c.ink, boxBg:d?c.ac:'transparent', boxBorder:d?c.ac:c.mu, badges, fromSift, noteTitle:note?(note.hidden?'Locked note':note.title):'note',
+          openNote:e=>{ e.stopPropagation(); if(note) note.hidden?askPin(note.id):this.openNote(note.id); },
+          toggle:()=>{ if(fromSift){ const k=st.src.slice(5); this.setState(x=>({done:{...x.done,[k]:!x.done[k]},syncedAt:Date.now()})); } else this.setState(x=>({wfDone:{...x.wfDone,[st.id]:!d},syncedAt:Date.now()})); } }; });
+      const dn=rows.filter(r=>r.mark).length; return {...it, subs:rows, empty:rows.length===0, progress:dn+'/'+rows.length}; });
+    const wfLine=`${wfDoneN} of ${wfTotal} Weekly Focus tasks done`;
+    const syncAgo=Math.round((Date.now()-s.syncedAt)/1000);
+    // to-dos
+    const mkTodo=(n,t,i)=>{ const key=n.id+'#'+i, d=!!s.done[key], link=s.links[key];
+      return {text:t, mark:d?'✓':'', deco:d?'line-through':'none', color:d?c.mu:c.ink, boxBg:d?c.ac:'transparent', boxBorder:d?c.ac:c.mu, source:n.title, date:fmtShort(n.ts),
+        linked:!!link, linkKey:link||'', canSend:!link&&s.sendFor!==key, sending:s.sendFor===key, modeLabel:n.theme==='eng'?'office':'personal',
+        send:e=>{ e.stopPropagation(); this.setState({sendFor:key,sendItem:this.suggestItem(n)}); },
+        open:e=>{ e.stopPropagation(); this.openNote(n.id); },
+        toggle:e=>{ e&&e.stopPropagation&&e.stopPropagation(); this.setState(x=>({done:{...x.done,[key]:!x.done[key]},syncedAt:link?Date.now():x.syncedAt})); }}; };
+    const todosFlat=open.filter(n=>n.todos.length).sort((a,b)=>b.ts-a.ts).flatMap(n=>n.todos.map((t,i)=>mkTodo(n,t,i)));
+    const openTodos=todosFlat.filter(t=>!t.mark).length;
+    const hiddenTodos=active.filter(n=>n.hidden).reduce((k,n)=>k+n.todos.length,0);
+    const sendNote=s.sendFor&&all.find(n=>n.id===s.sendFor.split('#')[0]);
+    // nav
+    const mkNav=(id,label,count)=>({id,label,count,hasBadge:count>0,go:()=>this.go(id), bg:s.view===id?c.ink:'transparent', color:s.view===id?c.bg:c.ink, badgeBg:s.view===id?'rgba(255,255,255,.18)':c.acs, badgeColor:s.view===id?c.bg:c.ac, mBg:s.view===id?c.bg:'transparent', mColor:s.view===id?c.ink:c.bg});
+    const nav=[mkNav('stream','Stream',0), mkNav('week','Week',wfTotal-wfDoneN), mkNav('map','Map',0), mkNav('lens','Lens',0), mkNav('todos','To-dos',openTodos), mkNav('conflicts',isMobile?'Dupes':'Conflicts',s.resolvedAs?0:1)];
+    const setFilter=f=>this.setState({filter:f,view:'stream',sel:null,q:''});
+    const sel0=all.find(n=>n.id===s.sel&&!n.hidden), sel=sel0?card(sel0):null;
+    const week=WEEKS.find(w=>w.id===s.week)||WEEKS[0], digestText=s.aiDigest[week.id]||week.digest;
+    const aiOn=(p.liveAi ?? true)&&!!(window.claude&&window.claude.complete);
+    const weekState=w=>s.aiDigest[w.id]?'AI':w.digest?'written':'—';
+    const hits=(!isCmd&&q)?visible.filter(n=>!n.hidden).slice(0,6).map(n=>({title:n.title,sum:n.sum,date:fmtShort(n.ts),color:themeColor(n.theme,dark),open:()=>this.openNote(n.id)})):[];
+    const cmds=[{key:'/new',label:'Write a note',run:()=>this.setState({q:''},()=>this.openCapture())},{key:'/week',label:'Weekly Focus board',run:()=>this.go('week')},{key:'/map',label:'Relevance map',run:()=>this.go('map')},{key:'/ambient',label:'Start ambient mode',run:()=>this.setState({q:'',ambient:true,ambTick:0})},{key:'/vault',label:s.unlocked?'Lock the vault':'Unlock the vault',run:()=>{ this.setState({q:''}); s.unlocked?this.setState({unlocked:false}):askPin(); }},{key:'/todos',label:'Open to-dos',run:()=>this.go('todos')},{key:'/import',label:'Import from Google Takeout',run:()=>this.setState({importStep:-2,q:''})},{key:'/archive',label:'Archive',run:()=>this.go('archive')},{key:dark?'/light':'/dark',label:'Switch theme',run:()=>this.setState({dark:!dark,q:''})}].filter(cm=>s.q==='/'||cm.key.startsWith(s.q.toLowerCase()));
+    // map
+    const mapNotes=open; const tsAll=mapNotes.map(n=>n.ts), minT=Math.min(...tsAll), maxT=Math.max(...tsAll);
+    const slots=mapNotes.length+THEMES.length, step=(Math.PI*2)/Math.max(1,slots); let idx=0; const pos={};
+    THEMES.forEach(t=>{ mapNotes.filter(n=>n.theme===t.id).sort((a,b)=>a.ts-b.ts).forEach((n,k)=>{ const ang=-Math.PI/2+idx*step, age=(maxT-n.ts)/((maxT-minT)||1), r=16+age*14; pos[n.id]={x:50+r*Math.cos(ang),y:31.25+r*0.86*Math.sin(ang),flip:k%2===1}; idx++; }); idx++; });
+    const ids=Object.keys(pos), RX=18, RY=11;
+    for(let it=0;it<60;it++){ for(let i=0;i<ids.length;i++) for(let j=i+1;j<ids.length;j++){ const A=pos[ids[i]],B=pos[ids[j]]; let dx=(B.x-A.x)/RX, dy=(B.y-A.y)/RY; if(Math.abs(dx)<0.01&&Math.abs(dy)<0.01){dx=0.01*(i%2?1:-1);dy=0.01;} const d=Math.hypot(dx,dy); if(d<1){ const push=(1-d)/2; A.x-=dx/d*push*RX; A.y-=dy/d*push*RY; B.x+=dx/d*push*RX; B.y+=dy/d*push*RY; } }
+      ids.forEach(k=>{ pos[k].x=Math.min(90,Math.max(10,pos[k].x)); pos[k].y=Math.min(53,Math.max(9,pos[k].y)); }); }
+    ids.forEach(k=>{ if(s.mapPos[k]) pos[k]={...pos[k],x:s.mapPos[k].x,y:s.mapPos[k].y}; }); this._pos=pos;
+    const SIM_MIN=0.15, SIM_NEW=0.06, thr=(a,b)=>(a.id[0]==='x'||b.id[0]==='x')?SIM_NEW:SIM_MIN, edges=[];
+    for(let i=0;i<mapNotes.length;i++) for(let j=i+1;j<mapNotes.length;j++){ const a=mapNotes[i],b=mapNotes[j], sim=this.simOf(a,b); if(sim>thr(a,b)){ const touch=s.hover&&(s.hover===a.id||s.hover===b.id); edges.push({x1:pos[a.id].x,y1:pos[a.id].y,x2:pos[b.id].x,y2:pos[b.id].y,w:(1+sim*6)+'px',op:s.hover?(touch?.95:.06):s.mapTopic?((a.theme===s.mapTopic||b.theme===s.mapTopic)?.85:.05):(.25+sim*.6)}); } }
+    const newest=s.extra[0]&&s.extra[0].id;
+    const nodes=mapNotes.map(n=>{ const linked=!s.hover||s.hover===n.id||mapNotes.some(o=>o.id===s.hover&&this.simOf(n,o)>thr(n,o));
+      return {title:n.title,x:pos[n.id].x,y:pos[n.id].y/62.5*100,dir:pos[n.id].flip?'column-reverse':'column',color:themeColor(n.theme,dark),size:s.hover===n.id?'16px':(n.pinned?'13px':'10px'),op:(linked&&(!s.mapTopic||n.theme===s.mapTopic||s.hover===n.id))?1:.2,cursor:s.dragging===n.id?'grabbing':'grab',z:s.dragging===n.id||s.hover===n.id?5:1,weight:s.hover===n.id?600:400,ring:n.id===newest?'0 0 0 6px '+c.acs:'0 0 0 0 transparent',
+        down:e=>this.nodeDown(e,n.id),enter:()=>this.setState({hover:n.id}),leave:()=>this.setState({hover:null})}; });
+    const lockedCount=active.filter(n=>n.hidden).length;
+    const draftOn=s.view==='map'&&s.mapDraft.trim().length>=4, gSug=draftOn?this.suggestFor(s.mapDraft):{theme:null,related:[]};
+    const ghostEdges=gSug.related.filter(x=>pos[x.n.id]).map(x=>({x:pos[x.n.id].x,y:pos[x.n.id].y}));
+    const pN=s.placed&&all.find(n=>n.id===s.placed);
+    const pRel=pN?open.filter(n=>n.id!==pN.id).map(n=>({n,sim:this.simOf(pN,n)})).filter(x=>x.sim>SIM_NEW).sort((a,b)=>b.sim-a.sim).slice(0,2):[];
+    const related=sel0?open.filter(n=>n.id!==sel0.id).map(n=>({n,sim:this.simOf(sel0,n)})).filter(x=>x.sim>0.1).sort((a,b)=>b.sim-a.sim).slice(0,3).map(x=>({title:x.n.title,pct:Math.round(x.sim*100)+'%',color:themeColor(x.n.theme,dark),open:e=>{e.stopPropagation();this.openNote(x.n.id);}})):[];
+    // resurface + ambient
+    const pool=this.ambientPool(); const resN=pool.length?pool[s.resIdx%Math.min(pool.length,5)]:null; const ambN=pool.length?pool[s.ambIdx%pool.length]:null;
+    const topicName=id=>(THEMES.find(t=>t.id===id)||{name:'Scraps'}).name;
+    // capture
+    const pd=parseDraft(s.capText,s.capList); const capSug=s.capFocus&&s.capText.trim()?this.suggestFor(s.capText):{theme:null,related:[]};
+    const pvThemeId=s.capTheme||pd.themeFromTag||capSug.theme||'scrap'; const pvTag=s.capTheme||pd.themeFromTag?'':(capSug.theme?'AUTO':'');
+    const caretPos=Math.min(s.caret,s.capText.length), before=s.capText.slice(0,caretPos);
+    const mS=before.match(/(^|\n)(\/\w*)$/), mH=before.match(/(^|\s)(#[\w-]*)$/), mA=before.match(/(^|\s)(@[\w-]*)$/);
+    const ac=s.capFocus&&!s.acDismiss?(mS?{kind:'/',tok:mS[2]}:mH?{kind:'#',tok:mH[2]}:mA?{kind:'@',tok:mA[2]}:null):null;
+    const labelsAll=[...new Set(all.flatMap(n=>n.labels||[]))]; const ctxAll=[...new Set([...BASE_CTX,...WF.items.flatMap(i=>i.subtasks.flatMap(st=>st.ctx||[]))])];
+    let acList=[]; if(ac){ const t=ac.tok.toLowerCase();
+      if(ac.kind==='/') acList=SLASH.filter(x=>x.k.startsWith(t)).map(x=>({...x,d:x.flag?(s.capFlags[x.flag]?x.d+' · on':x.d):x.d}));
+      else if(ac.kind==='#') acList=[...Object.entries(TAGS).map(([id,tag])=>({k:'#'+tag,d:topicName(id),theme:id})),...labelsAll.map(l=>({k:'#'+l,d:'label'}))].filter(x=>x.k.toLowerCase().startsWith(t));
+      else acList=ctxAll.filter(x=>x.toLowerCase().startsWith(t)).map(x=>({k:x,d:'context · syncs to Weekly Focus'}));
+      acList=acList.slice(0,7); }
+    const acI=acList.length?((s.acIdx%acList.length)+acList.length)%acList.length:0;
+    const tN=s.toast&&all.find(n=>n.id===s.toast.id);
+    return {
+      c, isDesktop, isMobile, frameMax:isMobile?'430px':'1240px', hdrPad:isMobile?'12px 14px':'16px 32px', hdrGap:isMobile?'8px':'18px', mainPad:isMobile?'10px 16px 150px':'22px 36px 170px', sectionGap:isMobile?'28px':'44px',
+      heroCols:isMobile?'1fr':'minmax(0,1.3fr) minmax(0,1fr)', heroGap:isMobile?'22px':'56px', digestSize:isMobile?'26px':'36px',
+      monthCols:isMobile?'1fr':'180px minmax(0,1fr)', monthGap:isMobile?'10px':'32px', monthPos:isMobile?'static':'sticky', monthDir:isMobile?'row':'column', monthLabelGap:isMobile?'10px':'6px', monthSize:isMobile?'32px':'52px',
+      rowCols:isMobile?'40px minmax(0,1fr)':'56px minmax(0,1fr) 80px', rowGap:isMobile?'12px':'20px', titleSize:isMobile?'19px':'22px', h1Size:isMobile?'34px':'48px', lensCols:isMobile?'1fr':'repeat(4,minmax(0,1fr))', pairCols:isMobile?'1fr':'1fr 1fr', wfCols:isMobile?'1fr':'repeat(auto-fit,minmax(280px,1fr))',
+      sheetAlign:isMobile?'flex-end':'center', sheetPad:isMobile?'40px 0 0':'32px', capPad:isMobile?'40px 0 0':'10vh 32px 32px', sheetRadius:isMobile?'22px 22px 0 0':'22px', sheetMaxH:isMobile?'calc(100vh - 40px)':'calc(100vh - 64px)', sheetTitle:isMobile?'30px':'40px',
+      nav, goStream:()=>this.go('stream'), goWeek:()=>this.go('week'), q:s.q, hasQ:s.q.length>0, setQ:e=>this.setState({q:e.target.value}), clearQ:()=>this.setState({q:''}),
+      onKey:e=>{ if(e.key==='Enter'){ if(isCmd&&cmds[0]) cmds[0].run(); else if(hits[0]) hits[0].open(); } }, cmdOpen:isCmd&&cmds.length>0, cmds, hitsOpen:hits.length>0, hits, hitsFoot:'Enter opens the first match'+(lockedCount&&!s.unlocked?' · vault notes are not searched':''),
+      toggleDark:()=>this.setState({dark:!dark}), sunBg:dark?c.ink:c.ac, sunShadow:dark?'inset -3px -2px 0 0 '+c.sf:'none',
+      vaultBtn:()=>s.unlocked?this.setState({unlocked:false,sel:null}):askPin(), vaultTitle:s.unlocked?'Lock vault':'Unlock vault', vaultWord:s.unlocked?'OPEN':'VAULT', vaultBorder:s.unlocked?c.ac:c.ln, vaultBg:s.unlocked?c.acs:c.sf, vaultColor:s.unlocked?c.ac:c.mu, shackleTop:s.unlocked?'-3px':'0px',
+      startAmbient:()=>this.setState({ambient:true,ambTick:0}),
+      isStream:s.view==='stream', isWeek:s.view==='week', isMap:s.view==='map', isLens:s.view==='lens', isTodos:s.view==='todos', isConflicts:s.view==='conflicts', isArchive:s.view==='archive',
+      hasResurface:!!resN, res:resN?{title:resN.title,sum:resN.sum,ago:ago(resN.ts),open:()=>this.openNote(resN.id)}:{}, resOpacity:s.resFade?0:1, resShift:s.resFade?'translateY(-4px)':'none',
+      resDots:Array.from({length:Math.min(pool.length,5)},(_,i)=>({bg:i===s.resIdx%Math.min(pool.length||1,5)?c.ac:c.ln})),
+      weekLabel:'Week of '+week.label, weekCount:week.notes.length+(week.notes.length===1?' note':' notes'), digestText:digestText||'No digest for this week yet. Write one.',
+      genDigest:()=>this.genDigest(week,wfLine), digestBusy:s.busyDigest, digestBtn:s.busyDigest?'Writing…':(digestText?'Rewrite':'Write digest'), digestNote:aiOn?'Live AI':'Sample mode',
+      wfLine, wfPct:Math.round(wfTotal?wfDoneN/wfTotal*100:0)+'%',
+      weeks:WEEKS.map(w=>({...w,go:()=>this.setState({week:w.id}), bg:s.week===w.id?c.ink:'transparent', border:s.week===w.id?c.ink:c.ln, dot:(s.aiDigest[w.id]||w.digest)?'8px':'4px', dotBg:s.week===w.id?c.bg:((s.aiDigest[w.id]||w.digest)?c.ac:c.mu)})),
+      weeksFull:WEEKS.map(w=>({...w,go:()=>this.setState({week:w.id}), rowBg:s.week===w.id?c.sf:'transparent', labelColor:s.week===w.id?c.ac:c.ink, titles:all.filter(n=>w.notes.includes(n.id)).map(n=>n.hidden?'Locked note':n.title).join(' · '), state:weekState(w), stateColor:weekState(w)==='—'?c.mu:c.ac})),
+      toggleMonday:()=>this.setState({mondayAuto:!s.mondayAuto}), mondayBg:s.mondayAuto?c.ac:c.mu, mondayKnob:s.mondayAuto?'16px':'2px',
+      pinned:visible.filter(n=>n.pinned&&!n.hidden).map(card), months, noResults:visible.length===0,
+      hasFilter:s.filter!=='all', filterLabel:(THEMES.find(t=>t.id===s.filter)||{}).name||'#'+s.filter, clearFilter:()=>this.setState({filter:'all'}), visibleCount:visible.length+(visible.length===1?' note':' notes'),
+      wfItems:wfItemsV, wfHeadline:wfLine.replace(' Weekly Focus',''), parkedNote:parked?parked+(parked===1?' parked task is':' parked tasks are')+' hidden.':'', syncLabel:syncAgo<5?'Synced just now':'Synced '+syncAgo+'s ago', eowDone:WF.meta.eowDone||'—', eowCarry:WF.meta.eowCarry||'—',
+      wfOptions:items.filter(i=>i.active).map(i=>({key:i.key,label:i.key+(sendNote&&i.key===this.suggestItem(sendNote)?'  (suggested)':'')})), sendItem:s.sendItem||'', setSendItem:e=>this.setState({sendItem:e.target.value}), cancelSend:()=>this.setState({sendFor:null}),
+      confirmSend:()=>{ const key=s.sendFor, n=sendNote; if(!key||!n||!s.sendItem) return; const i=+key.split('#')[1];
+        const st={id:'s_'+Math.random().toString(36).slice(2,6),t:n.todos[i],done:false,del:false,when:'',md:n.theme==='eng'?'o':'p',urg:false,dl:false,loc:'',tag:'',ctx:[],lat:false,rv:'',src:'sift:'+key,u:Date.now()};
+        this.setState(x=>({wfAdded:{...x.wfAdded,[x.sendItem]:[...(x.wfAdded[x.sendItem]||[]),st]},links:{...x.links,[key]:x.sendItem},sendFor:null,syncedAt:Date.now()})); },
+      mapDraft:s.mapDraft, setMapDraft:e=>this.setState({mapDraft:e.target.value}), mapSave:e=>{ e.preventDefault(); const n=this.saveNote(s.mapDraft); if(!n) return; const linked=this.suggestFor(n.text).related.length>0; this.setState({mapDraft:'',placed:n.id,hover:linked?n.id:null}); clearTimeout(this._pl); this._pl=setTimeout(()=>this.setState(x=>({hover:x.hover===n.id?null:x.hover})),3500); },
+      mapBtnOp:s.mapDraft.trim()?1:.45,
+      mapHint:draftOn?(gSug.theme?'Will join '+topicName(gSug.theme)+(gSug.related.length?' · near '+gSug.related.map(x=>x.n.title).slice(0,2).join(', '):''):'No close match yet. It will land in Scraps.'):'Becomes a new note. Sift picks the topic and draws its links.',
+      hasGhost:draftOn, ghost:{color:gSug.theme?themeColor(gSug.theme,dark):c.mu,label:gSug.theme?topicName(gSug.theme):'Scraps'}, ghostEdges,
+      hasPlaced:!!pN, placed:pN?{color:themeColor(pN.theme,dark),msg:'Placed as a new note in '+topicName(pN.theme)+'. '+(pRel.length?'Linked to '+pRel.map(x=>x.n.title+' ('+Math.round(x.sim*100)+'%)').join(' and ')+'.':'No strong links yet. Add more detail to connect it.'),
+        open:()=>this.openNote(pN.id), undo:()=>this.setState(x=>({extra:x.extra.filter(m=>m.id!==pN.id),placed:null,hover:null}))}:{},
+      edges, nodes, legend:THEMES.map(t=>({name:t.name,color:themeColor(t.id,dark),op:!s.mapTopic||s.mapTopic===t.id?1:.45,weight:s.mapTopic===t.id?600:400,bg:s.mapTopic===t.id?c.acs:c.sf,border:s.mapTopic===t.id?c.ac:c.ln,go:()=>this.setState(x=>({mapTopic:x.mapTopic===t.id?null:t.id}))})), mapAspect:isMobile?'1/1.1':'16/9', mapRef:this.mapRef, bgDown:e=>this.bgDown(e), zoom:s.zoom, panX:s.pan.x, panY:s.pan.y, mapTrans:s.dragging?'none':'transform .25s ease-out', mapCursor:s.dragging==='bg'?'grabbing':'grab', zoomIn:()=>this.setState(x=>({zoom:Math.min(2.5,x.zoom*1.2)})), zoomOut:()=>this.setState(x=>({zoom:Math.max(0.6,x.zoom/1.2)})), resetMap:()=>this.setState({zoom:1,pan:{x:0,y:0},mapPos:{}}), zoomLabel:Math.round(s.zoom*100)+'%', hasMapEdits:Object.keys(s.mapPos).length>0||Math.abs(s.zoom-1)>0.01||s.pan.x!==0||s.pan.y!==0, hasMapTopic:!!s.mapTopic, mapTopicName:s.mapTopic?topicName(s.mapTopic):'', mapTopicToStream:()=>setFilter(s.mapTopic), clearMapTopic:()=>this.setState({mapTopic:null}), mapLabelMax:isMobile?'80px':'120px',
+      mapFoot:(lockedCount&&!s.unlocked?lockedCount+' vault notes hidden · ':'')+'centre = newest · line = similarity',
+      themes:THEMES.map((t,i)=>{ const ns=active.filter(n=>n.theme===t.id), locked=ns.length&&ns.every(n=>n.hidden);
+        return {...t,spanShown:isMobile?'span 1':t.span,countShown:locked?'—':ns.length,altShown:locked?'VAULT · LOCKED':t.alt,summaryShown:locked?'This whole thread lives in your vault. Unlock to see it.':t.summary,go:()=>locked?askPin():setFilter(t.id),bg:i%3===0?c.sf:(i%3===1?c.acs:c.sf2)}; }),
+      todoHeadline:openTodos+(openTodos===1?' thing to do':' things to do'), todosFlat, vaultTodoNote:hiddenTodos&&!s.unlocked?hiddenTodos+' more are locked in the vault.':'',
+      conflictHeadline:s.resolvedAs?'No open conflicts':'One pair to resolve', conflictPair:all.filter(n=>n.conflict).map(n=>({file:n.file,date:fmtLong(n.ts),text:n.text,facts:[n.pinned?'Pinned':'Not pinned',n.file.endsWith('json')?'JSON export':'HTML export','30 items']})),
+      isReview:s.cMode==='review', isMerge:s.cMode==='merge', modeReview:()=>this.setState({cMode:'review'}), modeMerge:()=>this.setState({cMode:'merge'}),
+      reviewBg:s.cMode==='review'?c.ink:'transparent', reviewColor:s.cMode==='review'?c.bg:c.ink, mergeBg:s.cMode==='merge'?c.ink:'transparent', mergeColor:s.cMode==='merge'?c.bg:c.ink,
+      unresolved:!s.resolvedAs, resolved:!!s.resolvedAs, keepBoth:()=>this.setState({resolvedAs:'kept'}), doMerge:()=>this.setState(x=>({resolvedAs:'merged',arch:{...x.arch,n9:true}})), undoResolve:()=>this.setState(x=>({resolvedAs:null,arch:{...x.arch,n9:false}})),
+      resolvedMsg:s.resolvedAs==='merged'?'Merged. The HTML copy moved to the archive.':'Kept both. They stay linked as a pair.',
+      archived:all.filter(n=>n.archived&&!n.hidden).map(card), hasArchived:all.some(n=>n.archived&&!n.hidden), noArchived:!all.some(n=>n.archived&&!n.hidden),
+      hasSel:!!sel, sel:sel?{...sel,dateLong:fmtLong(sel.ts)}:{}, closeSel:()=>this.setState({sel:null}), stop:e=>e.stopPropagation(),
+      toggleVault:()=>{ if(!sel) return; const inV=sel.vault; this.setState(x=>inV?({vaultMarks:{...x.vaultMarks,[sel.id]:false},unvault:{...x.unvault,[sel.id]:true}}):({vaultMarks:{...x.vaultMarks,[sel.id]:true},unvault:{...x.unvault,[sel.id]:false},sel:x.unlocked?x.sel:null})); },
+      vaultSelLabel:sel&&sel.vault?'Remove from vault':'Move to vault', vaultSelColor:sel&&sel.vault?c.ac:c.ink,
+      togglePin:()=>sel&&this.setState(x=>({pins:{...x.pins,[sel.id]:!sel.pinned}})), pinLabel:sel&&sel.pinned?'Unpin':'Pin', pinColor:sel&&sel.pinned?c.ac:c.ink,
+      toggleArchive:()=>sel&&this.setState(x=>({arch:{...x.arch,[sel.id]:!sel.archived},sel:null})), archLabel:sel&&sel.archived?'Unarchive':'Archive',
+      summarise:()=>sel&&this.summarise(sel), sumBusy:s.busySum, sumBtn:s.busySum?'Thinking…':(sel&&s.aiSum[sel.id]?'Again':'Summarise'), summarySource:sel&&s.aiSum[sel.id]?(aiOn?'live AI':'sample'):'saved at import',
+      summaryEn:sel?(s.aiSum[sel.id]||sel.sum):'', hasOrigSummary:!!(sel&&!s.aiSum[sel.id]&&sel.sumOrig), summaryOrig:sel?sel.sumOrig||'':'',
+      selTodos:sel0?sel0.todos.map((t,i)=>mkTodo(sel0,t,i)):[], hasSelTodos:!!(sel0&&sel0.todos.length), related, hasRelated:related.length>0,
+      selHasConflict:!!(sel&&sel.conflict&&!s.resolvedAs), goConflicts:()=>this.go('conflicts'),
+      openCapture:()=>this.openCapture(), capRef:this.capRef, capText:s.capText, capRows:s.capFocus?Math.min(8,Math.max(1,s.capText.split('\n').length)):1,
+      setCapText:e=>this.setState({capText:e.target.value,caret:e.target.selectionStart,acDismiss:false,acIdx:0}), capCaret:e=>{ const p2=e.target.selectionStart; if(p2!==s.caret) this.setState({caret:p2}); },
+      capFocusOn:()=>{ clearTimeout(this._blurT); this.setState({capFocus:true}); }, capBlur:()=>{ clearTimeout(this._blurT); this._blurT=setTimeout(()=>this.setState({capFocus:false}),160); },
+      capKey:e=>{ if(ac&&acList.length){ if(e.key==='ArrowDown'){ e.preventDefault(); this.setState({acIdx:acI+1}); return; } if(e.key==='ArrowUp'){ e.preventDefault(); this.setState({acIdx:acI-1}); return; } if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); this.applyAc(ac,acList[acI]); return; } if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); this.setState({acDismiss:true}); return; } }
+        if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); this.saveBar(); return; } if(e.key==='Escape'){ e.target.blur(); } },
+      capPaste:e=>{ const items=(e.clipboardData&&e.clipboardData.items)||[]; for(const it of items){ if(it.type&&it.type.startsWith('image/')){ const file=it.getAsFile(); if(!file) continue; e.preventDefault(); const r=new FileReader(); r.onload=()=>this.setState({capImg:r.result}); r.readAsDataURL(file); return; } } },
+      barPlaceholder:s.capFocus?(isMobile?'Write… / # @':'Write… type / for commands, # for topic, @ for context'):(isMobile?'Write a note':'Write a note…   press N'), barTips:isMobile?'':'⌘/Ctrl + Enter saves',
+      barBorder:s.capFocus?c.ac:c.ln, barShadow:s.capFocus?'0 22px 60px rgba(0,0,0,.18)':'0 10px 30px rgba(0,0,0,.10)', barBottom:isMobile?'78px':'20px', barW:isMobile?'calc(100% - 20px)':'min(760px, calc(100% - 48px))',
+      showTemplates:s.capFocus&&!s.capText, templates:Object.keys(TEMPLATES).map(k=>({label:k[0].toUpperCase()+k.slice(1),pick:e=>{ e.preventDefault(); const tpl=TEMPLATES[k](); const pos=k==='journal'?tpl.length:tpl.indexOf('\n'); this.setState({capText:tpl,caret:pos},()=>{ const el=this._capEl; if(el){ el.focus(); el.setSelectionRange(pos,pos); } }); }})),
+      capExpanded:s.capFocus&&s.capText.trim().length>0, pvTitle:pd.title, pvTopic:{name:topicName(pvThemeId),color:themeColor(pvThemeId,dark),tag:pvTag},
+      cycleTopic:e=>{ e.preventDefault(); const order=THEMES.map(t=>t.id); const k=order.indexOf(pvThemeId); this.setState({capTheme:order[(k+1)%order.length]}); },
+      pvFlags:[...(s.capFlags.pin?[{t:'Pinned'}]:[]),...(s.capFlags.vault?[{t:'Vault'}]:[]),...(s.capFlags.wf?[{t:pd.todos.length?'→ '+this.suggestItem({theme:pvThemeId}):'WF · add a to-do'}]:[])],
+      pvShowList:pd.detected||s.capList===true, pvListLabel:pd.list?'Checklist ✓':'Make checklist', pvListBg:pd.list?c.ac:'transparent', pvListColor:pd.list?c.acink:c.ink, pvListBorder:pd.list?c.ac:c.ln, toggleList:e=>{ e.preventDefault(); this.setState({capList:!pd.list}); },
+      pvTags:[...pd.labels.map(l=>({t:'#'+l})),...pd.ctx.map(x=>({t:x}))], pvHasTags:pd.labels.length+pd.ctx.length>0,
+      pvTodos:pd.todos.slice(0,4).map(t=>({t})), pvHasTodos:pd.todos.length>0, pvHasMore:pd.todos.length>4, pvMore:'+'+(pd.todos.length-4)+' more',
+      pvLinks:pd.links.map((l,i)=>({...l,letter:l.domain[0].toUpperCase(),bg:'oklch(0.6 0.13 '+LINK_HUES[i%LINK_HUES.length]+')'})), pvHasLinks:pd.links.length>0,
+      pvHasImg:!!s.capImg, capImgBg:s.capImg?'url("'+s.capImg+'")':'none', removeImg:e=>{ e.preventDefault(); this.setState({capImg:null}); },
+      pvRelated:capSug.related.map(x=>({title:x.n.title,pct:Math.round(x.sim*100)+'%',color:themeColor(x.n.theme,dark)})), pvHasRelated:capSug.related.length>0,
+      acOpen:!!(ac&&acList.length), acTitle:ac?(ac.kind==='/'?'Commands':ac.kind==='#'?'Topic or label':'Context'):'', acItems:acList.map((x,i)=>({k:x.k,d:x.d,bg:i===acI?c.acs:'transparent',pick:e=>{ e.preventDefault(); this.applyAc(ac,x); }})),
+      hasToast:!!(s.toast&&tN), toast:tN?{msg:s.toast.msg,color:themeColor(tN.theme,dark),open:()=>{ this.setState({toast:null}); tN.hidden?askPin(tN.id):this.openNote(tN.id); },undo:()=>this.undoNote(tN.id)}:{},
+      saveDown:e=>{ e.preventDefault(); this.saveBar(); }, saveBg:s.capText.trim()?c.ink:c.sf2, saveColor:s.capText.trim()?c.bg:c.mu,
+      micDown:e=>{ e.preventDefault(); if(!s.capFocus) this.openCapture(); this.toggleVoice(); }, micLabel:s.listening?'Listening… tap to stop':'Dictate', micBg:s.listening?c.ac:'transparent', micColor:s.listening?c.acink:c.mu, micBorder:s.listening?c.ac:c.ln, micAnim:s.listening?'siftpulse 1s ease-in-out infinite':'none',
+      selHasImg:!!(sel&&sel.img), selImgBg:sel&&sel.img?'url("'+sel.img+'")':'none',
+      pinOpen:s.pinOpen, closePin:()=>this.setState({pinOpen:false,pin:''}), pinPrompt:s.pinErr?'Wrong PIN':'Enter PIN', pinShake:s.pinErr?'siftshake .3s':'none',
+      pinDots:[0,1,2,3].map(i=>({bg:i<s.pin.length?(s.pinErr?c.ink:c.ac):'transparent',border:s.pinErr?c.ink:(i<s.pin.length?c.ac:c.mu)})),
+      keypad:['1','2','3','4','5','6','7','8','9','','0','⌫'].map(k=>({label:k,vis:k?'visible':'hidden',border:k==='⌫'?'transparent':c.ln,bg:k==='⌫'?'transparent':c.bg,press:()=>k==='⌫'?this.setState(x=>({pin:x.pin.slice(0,-1)})):k&&this.pressPin(k)})),
+      ambient:s.ambient&&!!ambN, exitAmbient:()=>this.setState({ambient:false}), amb:ambN?{title:ambN.title,sum:ambN.sum,ago:ago(ambN.ts),topic:topicName(ambN.theme),color:themeColor(ambN.theme,dark)}:{},
+      ambOpacity:s.ambFade?0:1, ambShift:s.ambFade?'translateY(12px)':'none', ambProgress:Math.round(s.ambTick/(p.ambientSeconds ?? 20)*100)+'%', ambPad:isMobile?'40px 24px':'60px 80px', ambTitle:isMobile?'40px':'76px', ambBody:isMobile?'20px':'28px',
+      importOpen:s.importStep!==-1, importIdle:s.importStep===-2, importRunning:s.importStep===0, importDone:s.importStep===1, startImport:()=>this.startImport(), closeImport:()=>{clearInterval(this._t);this.setState({importStep:-1});},
+      importPctLabel:Math.round(s.importPct)+'%', importStage:s.importPct<35?'Reading Takeout/Keep…':s.importPct<70?'Parsing JSON and HTML notes…':'Finding threads and near-duplicates…', importStats:[{v:'10',k:'files read'},{v:'9',k:'unique notes'},{v:'1',k:'near-duplicate pair'},{v:'3',k:'languages'}]
+    };
+  }
+}
+</script>
+</body>
+</html>
