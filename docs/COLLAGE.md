@@ -1,6 +1,6 @@
 # Collage mode — implementation spec
 
-Reference prototype: `Sift Collage v3.dc.html` (open next to `support.js` + `sift-data.js`). Recreate in React; don't ship the HTML.
+Reference prototype: [`prototype/Sift Collage v3.dc.html`](prototype/Sift%20Collage%20v3.dc.html) (open it from `docs/prototype/`, next to `support.js` + `sift-data.js`). Recreate in React; don't ship the HTML.
 
 ## Route & entry
 - New view `collage` (route `/collage`), added to the header nav and mobile bottom nav next to Map.

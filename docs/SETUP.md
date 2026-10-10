@@ -1,7 +1,7 @@
 # Sift setup (Vite + React + Supabase)
 
 ## 1. Supabase
-1. Use the existing project (shared with Weekly Focus). SQL editor → run `supabase/schema.sql`. Besides the tables in the handoff, it creates `sift_conflict_dismissals` (stores "Keep both" on Conflicts) and `sift_has_pin()` (the first unlock asks you to choose a PIN).
+1. Use the existing project (shared with Weekly Focus). SQL editor → run [`supabase/schema.sql`](../supabase/schema.sql), then every file in [`supabase/migrations/`](../supabase/migrations/) in name order (after a pull, run only the new ones). Besides the tables in the handoff, it creates `sift_conflict_dismissals` (stores "Keep both" on Conflicts) and `sift_has_pin()` (the first unlock asks you to choose a PIN).
 2. Authentication → Providers → **Google**: enable; add OAuth client ID/secret from Google Cloud Console (Authorized redirect: `https://<project>.supabase.co/auth/v1/callback`). Add your app origins (localhost:5173, your host) to Redirect URLs.
 3. Roles: Sift reads `public.authentication_mode_user_roles` by `auth_user_id = auth.uid()`. Rows without `auth_user_id` (Igarashi, Niidome) should be back-filled on first Google login via a trigger or by matching `email` — add:
    ```sql
@@ -13,13 +13,14 @@
 5. Realtime: enable for `sift_notes`, `sift_todos`, `sift_highlights`, `weekly_focus_entries`.
 
 ## 2. App
+Run these from the repository root.
 ```bash
 npm install
 cp .env.example .env      # fill VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
 npm run dev               # http://localhost:5173
 npm run build             # typecheck + static PWA in dist/
 ```
-With no Supabase values in `.env`, Sift runs **local-only**: no sign-in, data in IndexedDB, Weekly Focus seeded from `supabase/weekly_focus_sample.json`, demo vault PIN 0000 (change it with `/pin`).
+With no Supabase values in `.env`, Sift runs **local-only**: no sign-in, data in IndexedDB, Weekly Focus seeded from [`supabase/weekly_focus_sample.json`](../supabase/weekly_focus_sample.json), demo vault PIN 0000 (change it with `/pin`).
 Fonts are self-hosted via @fontsource. The CJK/Devanagari subsets are cached by the service worker on first use, not precached.
 
 ## 3. Structure
@@ -29,10 +30,10 @@ src/
   lib/parse.ts (composer rules)  capture.ts (text → note)  config.ts (tokens, topics)  format.ts
   similarity.ts  keepImport.ts  types.ts
   state/store.ts (zustand: data + actions)  derived.ts (vault filtering, trigram index, conflicts)  counts.ts
-  screens/   Stream Week Map Lens Todos Conflicts Archive
+  screens/   Stream Week Map Collage Lens Todos Conflicts Archive
   components/ Header Composer NoteSheet PinModal Ambient ImportModal Login
 ```
-Search-bar commands: /new /week /map /ambient /vault /todos /import /archive /dark /pin /signout.
+Search-bar commands: /new /week /map /collage /ambient /vault /todos /import /archive /dark /pin /signout.
 
 ## 4. Weekly Focus write rule
 To tick a subtask: read the item row, map `payload.subtasks` replacing the one with matching `id` (`done`, `u: Date.now()`), update the row. To add from Sift: push `{ id:'s_'+rand, t, done:false, u:Date.now(), del:false, when:'', md: topic==='eng'?'o':'p', urg:false, dl:false, loc:'', tag:'', ctx, lat:false, latAt:0, rv:'', src:'sift:<noteId>#<ord>' }`. Store `wf_item_key` + `wf_subtask_id` on `sift_todos`.
