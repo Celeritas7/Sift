@@ -164,7 +164,8 @@ function Board({ shown, marks, live }: { shown: CollageRow[]; marks: CollageMark
 
 // ---------- scatter ----------
 interface Ghost { id: string; rot: number; t: string; x: number; y: number; fs: string; ink: string; bg: string; sh: string; }
-interface Drag { id: string; sx: number; sy: number; ox: number; oy: number; x: number; y: number; moved: boolean; }
+interface Drag { id: string; pid: number; sx: number; sy: number; ox: number; oy: number; x: number; y: number; moved: boolean;
+  armed: boolean; touch: boolean; tap: boolean; hold?: ReturnType<typeof setTimeout>; }
 
 /** Up to 3 passages worth showing: the user's own highlights first (widened to whole sentences, in text order),
  *  then top-scoring sentences and sentences holding marks, in text order. */
@@ -186,13 +187,28 @@ function picksFor({ n, m, own }: CollageRow, marks: CollageMark[]): Seg[][] {
   return [[{ t: t0.length > 140 ? t0.slice(0, 140) + '…' : t0, kind: 'plain' }]];
 }
 
+const HOLD_MS = 250, HOLD_SLOP = 8;
+
 function Scatter({ shown, marks }: { shown: CollageRow[]; marks: CollageMark[] }) {
   const cfg = useStore(s => s.collage), saved = useStore(s => s.layout.collage), shuffle = useStore(s => s.shuffleCollage); const { c, dark } = usePalette();
   const boardRef = useRef<HTMLDivElement>(null); const [bw, setBw] = useState(900); const [, setTick] = useState(0);
   const drag = useRef<Drag | null>(null); const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [z, setZ] = useState<{ top: number; m: Record<string, number> }>({ top: 100, m: {} });
-  const [ghosts, setGhosts] = useState<Ghost[]>([]); const gk = useRef('');
+  const [ghosts, setGhosts] = useState<Ghost[]>([]); const gk = useRef(''); const [bottom, setBottom] = useState(0);
   useEffect(() => { setZ({ top: 100, m: {} }); }, [cfg.seed]);
+  const front = (id: string) => setZ(s => ({ top: s.top + 1, m: { ...s.m, [id]: s.top + 1 } }));
+
+  /** Copy every mark span to a layer above all cards (marked words are never hidden), and find the lowest card bottom.
+   *  Only sets state when something changed, so calling it after every render cannot loop. */
+  const measure = () => { const b = boardRef.current; if (!b) return; const br = b.getBoundingClientRect(), out: Ghost[] = []; let low = 0;
+    b.querySelectorAll<HTMLElement>('[data-cid]').forEach(card => { low = Math.max(low, card.offsetTop + card.offsetHeight); });
+    b.querySelectorAll<HTMLElement>('[data-cid] [data-mk="1"]').forEach(el => { const card = el.closest<HTMLElement>('[data-cid]')!, r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+      out.push({ id: card.dataset.cid!, rot: Number(card.dataset.rot) || 0, t: el.textContent || '', x: Math.round(r.left + r.width / 2 - br.left - b.clientLeft), y: Math.round(r.top + r.height / 2 - br.top - b.clientTop),
+        fs: cs.fontSize, ink: cs.color, bg: cs.backgroundColor, sh: cs.boxShadow }); });
+    setBottom(prev => (prev === low ? prev : low));
+    const k = JSON.stringify(out); if (k !== gk.current) { gk.current = k; setGhosts(out); } };
+  const measureRef = useRef(measure); measureRef.current = measure;
+  useLayoutEffect(() => measure());
 
   // Board width, and re-measure the mark overlay once web fonts settle.
   useEffect(() => { const el = boardRef.current; if (!el) return; let alive = true;
@@ -200,50 +216,55 @@ function Scatter({ shown, marks }: { shown: CollageRow[]; marks: CollageMark[] }
     void document.fonts?.ready.then(() => { if (alive) { gk.current = ''; setTick(t => t + 1); } });
     return () => { alive = false; ro.disconnect(); }; }, []);
 
+  // Mouse: drag after 4px. Touch/pen: the page scrolls (touch-action: pan-y) unless the finger is held still for 250 ms;
+  // after that the card follows the finger and scrolling is blocked. A quick tap opens the note.
   useEffect(() => {
-    const mv = (e: PointerEvent) => { const d = drag.current; if (!d) return; const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    const clearHold = (d: Drag) => { clearTimeout(d.hold); d.hold = undefined; };
+    const mv = (e: PointerEvent) => { const d = drag.current; if (!d || e.pointerId !== d.pid) return; const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+      if (!d.armed) { if (Math.abs(dx) + Math.abs(dy) > HOLD_SLOP) { clearHold(d); drag.current = null; } return; } // moved before the hold: it's a scroll
       if (!d.moved && Math.abs(dx) + Math.abs(dy) <= 4) return; d.moved = true;
       d.x = Math.round(Math.max(-40, d.ox + dx)); d.y = Math.round(Math.max(10, d.oy + dy)); setDragPos({ id: d.id, x: d.x, y: d.y }); };
-    const end = (open: boolean) => () => { const d = drag.current; if (!d) return; drag.current = null; const st = useStore.getState();
-      if (d.moved) void st.setLayout('collage', d.id, d.x, d.y); else if (open) st.openNote(d.id);
+    const end = (open: boolean) => (e: PointerEvent) => { const d = drag.current; if (!d || e.pointerId !== d.pid) return; clearHold(d); drag.current = null; const st = useStore.getState();
+      if (d.moved) void st.setLayout('collage', d.id, d.x, d.y); else if (open && d.tap) st.openNote(d.id);
       setDragPos(null); };
     const up = end(true), cancel = end(false);
+    // Once a touch drag is armed, stop the browser from turning the finger's movement into a scroll.
+    const touch = (e: TouchEvent) => { if (drag.current?.armed && drag.current.touch && e.cancelable) e.preventDefault(); };
+    const scroll = () => { if (drag.current?.moved) measureRef.current(); }; // the board moves under a dragged card while the page scrolls
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel);
-    return () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); };
+    window.addEventListener('touchmove', touch, { passive: false }); window.addEventListener('scroll', scroll, { passive: true, capture: true });
+    return () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('touchmove', touch); window.removeEventListener('scroll', scroll, { capture: true }); if (drag.current) clearTimeout(drag.current.hold); };
   }, []);
 
-  // Marked words are never hidden: copy every mark span to a layer above all cards. Only set state when the list changes.
-  useLayoutEffect(() => { const b = boardRef.current; if (!b) return; const br = b.getBoundingClientRect(), out: Ghost[] = [];
-    b.querySelectorAll<HTMLElement>('[data-cid] [data-mk="1"]').forEach(el => { const card = el.closest<HTMLElement>('[data-cid]')!, r = el.getBoundingClientRect(), cs = getComputedStyle(el);
-      out.push({ id: card.dataset.cid!, rot: Number(card.dataset.rot) || 0, t: el.textContent || '', x: Math.round(r.left + r.width / 2 - br.left - b.clientLeft), y: Math.round(r.top + r.height / 2 - br.top - b.clientTop),
-        fs: cs.fontSize, ink: cs.color, bg: cs.backgroundColor, sh: cs.boxShadow }); });
-    const k = JSON.stringify(out); if (k !== gk.current) { gk.current = k; setGhosts(out); } });
-
   const W = Math.max(320, bw), cw = bw < 520 ? 220 : 250, perRow = Math.max(1, Math.floor((W - cw) / (cw * 0.7)) + 1), stepX = perRow > 1 ? (W - cw) / (perRow - 1) : 0, stepY = 128;
-  let maxY = 0;
   const cards = shown.map((r, idx) => { const { n } = r, h = hash(n.id) + cfg.seed * 977, row = Math.floor(idx / perRow), col = idx % perRow, shift = row % 2 ? stepX * 0.5 : 0;
     const auto = { x: Math.round(Math.min(W - cw + 10, Math.max(-6, col * stepX + shift - (row % 2 && col === perRow - 1 ? stepX : 0) + (rnd(h) - 0.5) * 40))), y: Math.round(30 + row * stepY + rnd(h + 3) * 28) };
-    const at = dragPos?.id === n.id ? dragPos : saved[n.id] || auto; maxY = Math.max(maxY, at.y);
+    const at = dragPos?.id === n.id ? dragPos : saved[n.id] || auto;
     return { r, at, rot: cfg.tilt ? +((rnd(h + 7) - 0.5) * 8).toFixed(1) : 0, z: z.m[n.id] || (r.ok ? 50 : 1) + idx, L: look(n.id, n.topic, cfg, c, dark) };
   });
-  const down = (e: RPointerEvent, id: string, at: { x: number; y: number }) => { if (e.button > 0) return; e.preventDefault();
-    drag.current = { id, sx: e.clientX, sy: e.clientY, ox: at.x, oy: at.y, x: at.x, y: at.y, moved: false };
-    setZ(s => ({ top: s.top + 1, m: { ...s.m, [id]: s.top + 1 } })); };
+  const down = (e: RPointerEvent, id: string, at: { x: number; y: number }) => { if (e.button > 0 || drag.current) return;
+    const touch = e.pointerType !== 'mouse';
+    if (!touch) e.preventDefault(); // mouse: no text selection; touch: leave the gesture to the browser so the page can scroll
+    const d: Drag = { id, pid: e.pointerId, sx: e.clientX, sy: e.clientY, ox: at.x, oy: at.y, x: at.x, y: at.y, moved: false, armed: !touch, touch, tap: true };
+    if (touch) d.hold = setTimeout(() => { if (drag.current !== d) return; d.armed = true; d.tap = false; front(id); }, HOLD_MS); else front(id);
+    drag.current = d; };
   const byId = Object.fromEntries(cards.map(k => [k.r.n.id, k]));
+  const noMenu = (e: React.MouseEvent) => { if (drag.current?.touch) e.preventDefault(); }; // long-press must not open the context menu
 
   return <>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ flex: 1, fontSize: 13, color: 'var(--mu)' }}>Marked words stay on top, even when notes cover each other. Drag to move, click to open.</span>
+      <span style={{ flex: 1, fontSize: 13, color: 'var(--mu)' }}>Marked words stay on top, even when notes cover each other. Drag to move (press and hold on touch), click to open.</span>
       <button className="h-ac" onClick={() => { setDragPos(null); void shuffle(); }} style={{ ...smallBtn, padding: '6px 14px', background: 'var(--sf)' }}>Shuffle</button>
     </div>
-    <div ref={boardRef} style={{ position: 'relative', isolation: 'isolate', height: Math.max(560, maxY + cw + 140), borderRadius: 16, background: cfg.concept === 'sticky' ? (dark ? '#2A241F' : '#D9CDB8') : 'var(--sf2)',
+    <div ref={boardRef} style={{ position: 'relative', isolation: 'isolate', height: Math.max(560, bottom + 60), borderRadius: 16, background: cfg.concept === 'sticky' ? (dark ? '#2A241F' : '#D9CDB8') : 'var(--sf2)',
       border: '1px solid var(--ln)', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
       {cards.map(({ r, at, rot, z: zi, L }) => { const picks = picksFor(r, marks);
         return <div key={r.n.id} data-cid={r.n.id} data-rot={rot} role="button" tabIndex={0} aria-label={r.n.title || 'Untitled'}
-          onPointerDown={e => down(e, r.n.id, at)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); useStore.getState().openNote(r.n.id); } }}
+          onPointerDown={e => down(e, r.n.id, at)} onContextMenu={noMenu} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); useStore.getState().openNote(r.n.id); } }}
           style={{ position: 'absolute', left: at.x, top: at.y, width: cw, zIndex: zi, padding: '20px 18px 16px', minHeight: cfg.concept === 'sticky' ? Math.round(cw * 0.8) : 0,
             border: '1px solid ' + L.border, borderRadius: L.radius, background: L.bg, color: L.ink, boxShadow: L.shadow, transform: `rotate(${rot}deg)`, opacity: r.ok ? 1 : .4,
-            cursor: 'grab', touchAction: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            cursor: 'grab', touchAction: 'pan-y', WebkitTouchCallout: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {L.tape && <span aria-hidden="true" style={{ position: 'absolute', top: -9, left: 'calc(50% - 30px)', width: 60, height: 18, background: L.tape, transform: `rotate(${L.tapeRot}deg)`, borderRadius: 1 }} />}
           <span style={{ display: 'flex', gap: 8, fontFamily: MONO, fontSize: 10, letterSpacing: '.05em', textTransform: 'uppercase', color: L.mu }}>
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.n.title || 'Untitled'}</span><span>{fmt(r.n.ts)}</span>
@@ -252,14 +273,9 @@ function Scatter({ shown, marks }: { shown: CollageRow[]; marks: CollageMark[] }
             <Highlighted segs={segs} concept={cfg.concept} dark={L.dark} />
           </span>)}
         </div>; })}
-      {cards.filter(k => k.r.ok && k.r.m.mset.length).map(({ r, at, rot }) => <div key={'f' + r.n.id} aria-hidden="true" onPointerDown={e => down(e, r.n.id, at)}
-        style={{ position: 'absolute', left: at.x + 12, top: at.y - 14, zIndex: 9000, display: 'flex', gap: 4, maxWidth: cw - 20, flexWrap: 'wrap', transform: `rotate(${rot}deg)`, cursor: 'grab', touchAction: 'none' }}>
-        {r.m.mset.slice(0, 3).map(i => <span key={i} style={{ padding: '2px 8px', borderRadius: 5, background: mkBg(marks[i].ci, false), boxShadow: `inset 0 -2px 0 ${mkLine(marks[i].ci)},0 2px 6px rgba(0,0,0,.18)`,
-          color: MARK_INK, fontFamily: SERIF, fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap' }}>{marks[i].t}</span>)}
-      </div>)}
-      {ghosts.map((g, i) => { const k = byId[g.id]; return <span key={i} aria-hidden="true" onPointerDown={e => k && down(e, g.id, k.at)}
-        style={{ position: 'absolute', left: g.x, top: g.y, transform: `translate(-50%,-50%) rotate(${g.rot}deg)`, zIndex: 9500, whiteSpace: 'nowrap', fontFamily: SERIF, fontSize: g.fs, lineHeight: 1.45,
-          fontWeight: 700, color: g.ink, background: g.bg, boxShadow: (g.sh && g.sh !== 'none' ? g.sh + ', ' : '') + '0 3px 10px rgba(0,0,0,.25)', borderRadius: 3, padding: '0 2px', cursor: 'grab', touchAction: 'none' }}>{g.t}</span>; })}
+      {ghosts.map((g, i) => { const k = byId[g.id]; return <span key={i} aria-hidden="true" onPointerDown={e => k && down(e, g.id, k.at)} onContextMenu={noMenu}
+        style={{ position: 'absolute', left: g.x, top: g.y, transform: `translate(-50%,-50%) rotate(${g.rot}deg)`, zIndex: 9500, opacity: k && !k.r.ok ? .4 : 1, whiteSpace: 'nowrap', fontFamily: SERIF, fontSize: g.fs, lineHeight: 1.45,
+          fontWeight: 700, color: g.ink, background: g.bg, boxShadow: (g.sh && g.sh !== 'none' ? g.sh + ', ' : '') + '0 3px 10px rgba(0,0,0,.25)', borderRadius: 3, padding: '0 2px', cursor: 'grab', touchAction: 'pan-y', WebkitTouchCallout: 'none' }}>{g.t}</span>; })}
     </div>
   </>;
 }
