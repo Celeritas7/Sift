@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
+<script src="sift-data.js"></script>
+<style>
+html,body{margin:0;padding:0;background:#F4F0E8}
+*{box-sizing:border-box}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+button{font:inherit;color:inherit;cursor:pointer}
+textarea{font:inherit;color:inherit}
+textarea::placeholder{color:var(--mu)}
+@keyframes siftin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div data-screen-label="Collage v3" style="--bg:{{ c.bg }};--sf:{{ c.sf }};--sf2:{{ c.sf2 }};--ink:{{ c.ink }};--mu:{{ c.mu }};--ln:{{ c.ln }};--ac:{{ c.ac }};min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Helvetica Neue',Helvetica,'Noto Sans JP','Noto Sans Devanagari',sans-serif;font-size:14px;line-height:1.5;transition:background .3s,color .3s">
+
+<header style="position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 24px;background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--ln)">
+  <a href="Sift v3.dc.html" style="color:var(--ink);font-family:Newsreader,Georgia,serif;font-size:22px;font-weight:500;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;text-decoration:none">
+    <span style="width:9px;height:9px;border-radius:50%;background:var(--ac);display:inline-block"></span>Sift
+  </a>
+  <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">Collage</span>
+  <div style="display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--sf);border:1px solid var(--ln)">
+    <sc-for list="{{ conceptOpts }}" as="m" hint-placeholder-count="2">
+      <button onClick="{{ m.pick }}" style="padding:5px 12px;border:0;border-radius:999px;background:{{ m.bg }};color:{{ m.color }};font-size:12px">{{ m.label }}</button>
+    </sc-for>
+  </div>
+  <sc-if value="{{ isMarker }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:6px;padding:3px 10px 3px 12px;border-radius:999px;background:var(--sf);border:1px solid var(--ln)">
+      <span style="font-size:12px;color:var(--mu);margin-right:2px">Note color</span>
+      <sc-for list="{{ bgOpts }}" as="b" hint-placeholder-count="5">
+        <button onClick="{{ b.pick }}" title="{{ b.label }}" style="width:20px;height:20px;border-radius:50%;padding:0;background:{{ b.bg }};border:1px solid rgba(0,0,0,.18);box-shadow:{{ b.ring }}"></button>
+      </sc-for>
+    </div>
+  </sc-if>
+  <div style="flex:1"></div>
+  <span style="font-size:13px;color:var(--mu)">{{ countLine }}</span>
+  <div style="display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--sf);border:1px solid var(--ln)">
+    <sc-for list="{{ viewOpts }}" as="m" hint-placeholder-count="2">
+      <button onClick="{{ m.pick }}" style="padding:5px 12px;border:0;border-radius:999px;background:{{ m.bg }};color:{{ m.color }};font-size:12px">{{ m.label }}</button>
+    </sc-for>
+  </div>
+  <div style="display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--sf);border:1px solid var(--ln)">
+    <sc-for list="{{ filterOpts }}" as="m" hint-placeholder-count="2">
+      <button onClick="{{ m.pick }}" style="padding:5px 12px;border:0;border-radius:999px;background:{{ m.bg }};color:{{ m.color }};font-size:12px">{{ m.label }}</button>
+    </sc-for>
+  </div>
+  <button onClick="{{ toggleDark }}" title="Toggle theme" style="width:34px;height:34px;border-radius:50%;border:1px solid var(--ln);background:var(--sf);display:grid;place-items:center" style-hover="border-color:var(--ac)">
+    <span style="width:12px;height:12px;border-radius:50%;background:{{ sunBg }};box-shadow:{{ sunShadow }};display:inline-block"></span>
+  </button>
+</header>
+
+<div style="display:grid;grid-template-columns:{{ cols }};gap:28px;padding:24px;align-items:start">
+
+  <aside style="position:{{ padPos }};top:84px;display:flex;flex-direction:column;gap:14px;padding:18px;border:1px solid var(--ln);border-radius:16px;background:var(--sf)">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">Your writing</span>
+      <button onClick="{{ paste }}" style="padding:4px 10px;border:1px solid var(--ln);border-radius:999px;background:transparent;font-size:12px" style-hover="border-color:var(--ac)">Paste</button>
+      <button onClick="{{ clear }}" style="padding:4px 10px;border:1px solid var(--ln);border-radius:999px;background:transparent;font-size:12px" style-hover="border-color:var(--ac)">Clear</button>
+    </div>
+    <div style="display:grid;min-height:200px">
+      <div aria-hidden="true" style="grid-area:1/1;white-space:pre-wrap;overflow-wrap:break-word;font-family:Newsreader,Georgia,serif;font-size:17px;line-height:1.5;color:transparent;pointer-events:none"><sc-for list="{{ padSegs }}" as="g" hint-placeholder-count="1"><span style="background:{{ g.bg }};border-radius:3px;box-shadow:{{ g.sh }}">{{ g.t }}</span></sc-for></div>
+      <textarea ref="{{ padRef }}" value="{{ pad }}" onChange="{{ setPad }}" placeholder="Write or paste your paragraphs here. Select a word and pick a color below to mark it as important." style="grid-area:1/1;width:100%;height:100%;resize:none;overflow:hidden;border:0;outline:none;background:transparent;font-family:Newsreader,Georgia,serif;font-size:17px;line-height:1.5;padding:0;margin:0;caret-color:var(--ink)"></textarea>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--ln)">
+      <span style="font-size:12px;color:var(--mu)">Mark selected words</span>
+      <sc-for list="{{ markColors }}" as="mc" hint-placeholder-count="4">
+        <button onPointerDown="{{ mc.down }}" title="{{ mc.label }}" style="width:24px;height:24px;border-radius:6px;padding:0;border:0;background:{{ mc.bg }};box-shadow:inset 0 -3px 0 {{ mc.line }}" style-hover="transform:translateY(-1px)"></button>
+      </sc-for>
+      <span style="font-size:12px;color:var(--ac)">{{ flash }}</span>
+    </div>
+    <sc-if value="{{ hasMarks }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <sc-for list="{{ marks }}" as="mk" hint-placeholder-count="3">
+          <span style="display:flex;align-items:center;padding:3px 2px 3px 8px;border-radius:6px;background:{{ mk.bg }};box-shadow:inset 0 -2px 0 {{ mk.line }};color:#221E1A;font-size:12px">
+            <button onClick="{{ mk.cycle }}" title="Change color" style="border:0;background:transparent;padding:0;font-weight:600;color:#221E1A">{{ mk.t }}</button>
+            <span style="margin-left:6px;opacity:.7">{{ mk.n }}</span>
+            <button onClick="{{ mk.remove }}" title="Remove mark" style="border:0;background:transparent;padding:0 6px;font-size:15px;line-height:1;color:#221E1A">×</button>
+          </span>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ hasParas }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--ln)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="flex:1;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)">Paragraphs</span>
+          <span style="font-size:12px;color:var(--mu)">tap to turn off</span>
+        </div>
+        <sc-for list="{{ paras }}" as="p" hint-placeholder-count="3">
+          <button onClick="{{ p.toggle }}" style="display:grid;grid-template-columns:14px minmax(0,1fr);gap:10px;align-items:start;text-align:left;padding:9px 10px;border:1px solid var(--ln);border-radius:10px;background:var(--bg);opacity:{{ p.op }}" style-hover="border-color:var(--ac)">
+            <span style="width:14px;height:14px;margin-top:3px;border-radius:4px;background:{{ p.swatch }}"></span>
+            <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+              <span style="font-size:13px;line-height:1.4;text-decoration:{{ p.deco }}">{{ p.excerpt }}</span>
+              <span style="font-size:11px;color:var(--mu)">{{ p.stat }}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </aside>
+
+  <main style="min-width:0;display:flex;flex-direction:column;gap:14px">
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:48px 24px;border:1px dashed var(--ln);border-radius:16px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center">
+        <span style="font-family:Newsreader,Georgia,serif;font-size:22px">No note says anything like this yet</span>
+        <span style="color:var(--mu)">Try another paragraph, or turn on the ones you switched off.</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isBoard }}" hint-placeholder-val="{{ true }}">
+      <div style="column-width:260px;column-gap:22px">
+        <sc-for list="{{ cards }}" as="cd" hint-placeholder-count="6">
+          <button onClick="{{ cd.open }}" style="position:relative;display:block;width:100%;break-inside:avoid;margin:10px 0 24px;padding:20px 18px 16px;border:1px solid {{ cd.border }};border-radius:{{ cd.radius }};background:{{ cd.bg }};color:{{ cd.ink }};text-align:left;box-shadow:{{ cd.shadow }};transform:rotate({{ cd.rot }});opacity:{{ cd.op }};transition:opacity .3s,box-shadow .2s,background .2s" style-hover="box-shadow:0 2px 0 rgba(0,0,0,.05),0 18px 40px rgba(0,0,0,.16)">
+            <span style="display:{{ cd.tapeDisp }};position:absolute;top:-9px;left:calc(50% - 30px);width:60px;height:18px;background:{{ cd.tape }};transform:rotate({{ cd.tapeRot }});border-radius:1px"></span>
+            <span style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:{{ cd.mu }};margin-bottom:8px">
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ cd.topic }}</span>
+              <span>{{ cd.date }}</span>
+            </span>
+            <span style="display:block;font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:500;line-height:1.2;letter-spacing:-.01em;margin-bottom:8px;text-wrap:pretty">{{ cd.title }}</span>
+            <span style="display:block;font-size:13px;line-height:1.7;white-space:pre-line;overflow-wrap:anywhere"><sc-for list="{{ cd.segs }}" as="g" hint-placeholder-count="3"><span style="background:{{ g.bg }};mix-blend-mode:{{ g.blend }};padding:{{ g.pad }};font-weight:{{ g.fw }};box-shadow:{{ g.sh }};border-radius:{{ g.rad }};box-decoration-break:clone;-webkit-box-decoration-break:clone">{{ g.t }}</span></sc-for></span>
+            <sc-if value="{{ cd.hasHits }}" hint-placeholder-val="{{ false }}">
+              <span style="display:flex;align-items:center;gap:4px;margin-top:12px">
+                <sc-for list="{{ cd.dots }}" as="d" hint-placeholder-count="2"><span style="width:8px;height:8px;border-radius:2px;background:{{ d.bg }}"></span></sc-for>
+                <span style="margin-left:4px;font-size:11px;color:{{ cd.mu }}">{{ cd.hitLine }}</span>
+              </span>
+            </sc-if>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScatter }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="flex:1;font-size:13px;color:var(--mu)">Marked words stay on top, even when notes cover each other. Drag to move, click to open.</span>
+        <button onClick="{{ shuffle }}" style="padding:6px 14px;border:1px solid var(--ln);border-radius:999px;background:var(--sf);font-size:12px" style-hover="border-color:var(--ac)">Shuffle</button>
+      </div>
+      <div ref="{{ boardRef }}" style="position:relative;height:{{ boardH }};border-radius:16px;background:{{ boardBg }};border:1px solid var(--ln);overflow:hidden;user-select:none;-webkit-user-select:none">
+        <sc-for list="{{ scat }}" as="sd" hint-placeholder-count="6">
+          <div onPointerDown="{{ sd.down }}" data-cid="{{ sd.id }}" data-rot="{{ sd.rot }}" style="position:absolute;left:{{ sd.x }};top:{{ sd.y }};width:{{ sd.w }};z-index:{{ sd.z }};padding:20px 18px 16px;min-height:{{ sd.minH }};border:1px solid {{ sd.border }};border-radius:{{ sd.radius }};background:{{ sd.bg }};color:{{ sd.ink }};box-shadow:{{ sd.shadow }};transform:rotate({{ sd.rot }});opacity:{{ sd.op }};cursor:grab;touch-action:none;display:flex;flex-direction:column;gap:10px">
+            <span style="display:flex;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:{{ sd.mu }}">
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sd.title }}</span>
+              <span>{{ sd.date }}</span>
+            </span>
+            <sc-for list="{{ sd.picks }}" as="pk" hint-placeholder-count="2">
+              <span style="display:block;font-family:Newsreader,Georgia,serif;font-size:{{ sd.fs }};line-height:1.45;overflow-wrap:anywhere"><sc-for list="{{ pk.segs }}" as="g" hint-placeholder-count="1"><span data-mk="{{ g.mk }}" style="white-space:{{ g.ws }};background:{{ g.bg }};mix-blend-mode:{{ g.blend }};padding:{{ g.pad }};font-weight:{{ g.fw }};box-shadow:{{ g.sh }};border-radius:{{ g.rad }};box-decoration-break:clone;-webkit-box-decoration-break:clone">{{ g.t }}</span></sc-for></span>
+            </sc-for>
+          </div>
+        </sc-for>
+        <sc-for list="{{ flags }}" as="f" hint-placeholder-count="0">
+          <div onPointerDown="{{ f.down }}" style="position:absolute;left:{{ f.x }};top:{{ f.y }};z-index:9000;display:flex;gap:4px;max-width:{{ f.w }};flex-wrap:wrap;transform:rotate({{ f.rot }});cursor:grab;touch-action:none">
+            <sc-for list="{{ f.items }}" as="fi" hint-placeholder-count="1">
+              <span style="padding:2px 8px;border-radius:5px;background:{{ fi.bg }};box-shadow:inset 0 -2px 0 {{ fi.line }},0 2px 6px rgba(0,0,0,.18);color:#221E1A;font-family:Newsreader,Georgia,serif;font-size:15px;font-weight:600;white-space:nowrap">{{ fi.t }}</span>
+            </sc-for>
+          </div>
+        </sc-for>
+        <sc-for list="{{ ghosts }}" as="gh" hint-placeholder-count="0">
+          <span onPointerDown="{{ gh.down }}" style="position:absolute;left:{{ gh.x }};top:{{ gh.y }};transform:translate(-50%,-50%) rotate({{ gh.rot }});z-index:9500;white-space:nowrap;font-family:Newsreader,Georgia,serif;font-size:{{ gh.fs }};line-height:1.45;font-weight:700;color:{{ gh.ink }};background:{{ gh.bg }};box-shadow:{{ gh.sh }};border-radius:3px;padding:0 2px;cursor:grab;touch-action:none">{{ gh.t }}</span>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ hasVaultNote }}" hint-placeholder-val="{{ false }}">
+      <div style="font-size:12px;color:var(--mu)">{{ vaultNote }}</div>
+    </sc-if>
+  </main>
+</div>
+
+<sc-if value="{{ hasOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ close }}" style="position:fixed;inset:0;z-index:60;background:rgba(20,16,12,.42);display:grid;place-items:center;padding:24px;animation:siftin .2s ease-out">
+    <div onClick="{{ stop }}" style="width:min(680px,100%);max-height:86vh;overflow:auto;background:{{ op.bg }};color:{{ op.ink }};border-radius:{{ op.radius }};padding:28px 30px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 80px rgba(0,0,0,.25)">
+      <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:{{ op.mu }}">
+        <span style="flex:1">{{ op.topic }} · {{ op.date }}</span>
+        <button onClick="{{ close }}" style="border:0;background:transparent;font-size:20px;line-height:1;color:{{ op.mu }};padding:0">×</button>
+      </div>
+      <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:28px;font-weight:400;letter-spacing:-.015em;line-height:1.2">{{ op.title }}</h2>
+      <div style="font-size:15px;line-height:1.8;white-space:pre-line;overflow-wrap:anywhere"><sc-for list="{{ op.segs }}" as="g" hint-placeholder-count="3"><span style="background:{{ g.bg }};mix-blend-mode:{{ g.blend }};padding:{{ g.pad }};font-weight:{{ g.fw }};box-shadow:{{ g.sh }};border-radius:{{ g.rad }};box-decoration-break:clone;-webkit-box-decoration-break:clone">{{ g.t }}</span></sc-for></div>
+      <div style="font-size:12px;color:{{ op.mu }};padding-top:10px;border-top:1px solid {{ op.line }}">{{ op.hitLine }}</div>
+    </div>
+  </div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;concept&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;sticky&quot;,&quot;marker&quot;],&quot;default&quot;:&quot;sticky&quot;,&quot;tsType&quot;:&quot;'sticky'|'marker'&quot;},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;board&quot;,&quot;scatter&quot;],&quot;default&quot;:&quot;board&quot;,&quot;tsType&quot;:&quot;'board'|'scatter'&quot;},&quot;noteBg&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;paper&quot;,&quot;white&quot;,&quot;kraft&quot;,&quot;fog&quot;,&quot;ink&quot;],&quot;default&quot;:&quot;paper&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;filterMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;hide&quot;,&quot;dim&quot;],&quot;default&quot;:&quot;hide&quot;,&quot;tsType&quot;:&quot;'hide'|'dim'&quot;},&quot;tilt&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const LIGHT={bg:'#F4F0E8',sf:'#FBF9F4',sf2:'#ECE6DA',ink:'#221E1A',mu:'#6E665E',ln:'rgba(34,30,26,.12)',ac:'#8E5FC0'};
+const DARK={bg:'#161311',sf:'#1F1B18',sf2:'#2A2521',ink:'#EFE8DC',mu:'#9F958A',ln:'rgba(239,232,220,.12)',ac:'#B892E3'};
+const STICKY={eng:'#8FD3EE',soft:'#F7A8C8',lang:'#BDE58A',refl:'#F9B872',career:'#C9B6F2',scrap:'#E6DED0'};
+const INK_L='#221E1A',MU_L='rgba(34,30,26,.62)',INK_D='#EFE8DC',MU_D='rgba(239,232,220,.6)';
+const NOTE_BGS=[{id:'paper',label:'Paper (follows theme)'},{id:'white',label:'White',bg:'#FFFFFF'},{id:'kraft',label:'Kraft',bg:'#E6D7BC'},{id:'fog',label:'Fog',bg:'#E2E6EA'},{id:'ink',label:'Ink',bg:'#25211E',dark:true}];
+const YELLOW='#FFE53B';
+const HL=[95,300,160,30,230,345,125,265];
+const hlCol=(i,dark)=>`oklch(${dark?0.48:0.88} ${dark?0.11:0.14} ${HL[i%HL.length]})`;
+const MK=[{h:25,label:'Red'},{h:250,label:'Blue'},{h:150,label:'Green'},{h:310,label:'Violet'}];
+const mkBg=(i,dark)=>`oklch(${dark?0.56:0.8} 0.15 ${MK[i%MK.length].h})`;
+const mkLine=i=>`oklch(0.52 0.19 ${MK[i%MK.length].h})`;
+const marker=col=>`linear-gradient(180deg, transparent 10%, ${col} 10%, ${col} 90%, transparent 90%)`;
+const STOP=new Set('the and for that this with was were are but not you your from have has had they them then than there what when where which who will would can could should into just about over also only very more most some such been being its our out all any one each how why now ago did does done get got his her him she ours mine myself itself because while still even much many like make made really thing things wasnt dont didnt isnt its im ive used use once well kind lot need time per let'.split(' '));
+const SAMPLE='Two years ago I started studying software at home after work. Now my own app does image processing, pdf generation and git from the command prompt, so I unsubscribed from Adobe.\n\nChanging my personality was harder than any code. For a month I kept a perfect routine of diet, exercise and sleep, then dropped everything for study.\n\nFor Burmese, I want semantic fields first, prefix and suffix patterns next, and a study model that keeps growing like a tree.';
+const SAMPLE_MARKS=[{t:'personality',ci:0},{t:'semantic fields',ci:1},{t:'Adobe',ci:2}];
+const fmt=ts=>new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+const hash=s=>{let h=7;for(const ch of s)h=(h*31+ch.charCodeAt(0))|0;return Math.abs(h);};
+const rnd=seed=>{ const x=Math.sin(seed)*10000; return x-Math.floor(x); };
+function stem(w){ if(/[^\x00-\x7f]/.test(w)) return w; w=w.replace(/['’]s$/,'').replace(/['’]/g,'');
+  if(w.length>5&&w.endsWith('ing')) w=w.slice(0,-3); else if(w.length>4&&w.endsWith('ed')) w=w.slice(0,-2); else if(w.length>4&&w.endsWith('ies')) w=w.slice(0,-3)+'y'; else if(w.length>3&&w.endsWith('s')&&!w.endsWith('ss')) w=w.slice(0,-1);
+  if(w.length>4&&w.endsWith('e')) w=w.slice(0,-1); return w; }
+function tokens(str){ const ws=str.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}\p{M}'’-]*/gu)||[]; const out=new Set();
+  for(let w of ws){ w=w.replace(/['’-]+$/,''); const bare=w.replace(/['’]/g,''); if(w.length<3||STOP.has(bare)||/^\d+$/.test(w)) continue; out.add(stem(w)); }
+  return [...out]; }
+const same=(a,b)=>a===b||(a.length>=6&&b.length>=6&&a.slice(0,6)===b.slice(0,6));
+function splitSentences(text){ const out=[],re=/[^.!?。！？।\n]*[.!?。！？।]+|[^.!?。！？।\n]+|\n+/g; let m; while((m=re.exec(text))) out.push({s:m.index,e:m.index+m[0].length}); return out; }
+const isW=ch=>!!ch&&/[\p{L}\p{M}\p{N}]/u.test(ch);
+function findMarks(text,marks){
+  const lo=text.toLowerCase(),out=[];
+  marks.forEach((m,mi)=>{ const k=m.t.toLowerCase().trim(); const ascii=!/[^\x00-\x7f]/.test(k), single=!/\s/.test(k);
+    const key=single&&ascii?stem(k):k; if(key.length<2) return; let i=0;
+    while((i=lo.indexOf(key,i))!==-1){ let s=i,e=i+key.length;
+      if(ascii&&isW(lo[s-1])){ i=e; continue; }
+      if(ascii) while(e<lo.length&&isW(lo[e])) e++;
+      out.push({s,e,mi}); i=e; } });
+  out.sort((a,b)=>a.s-b.s||b.e-a.e); const clean=[]; let end=-1; for(const r of out){ if(r.s>=end){ clean.push(r); end=r.e; } } return clean;
+}
+
+class Component extends DCLogic {
+  state={pad:SAMPLE,marks:SAMPLE_MARKS,muted:{},concept:null,view:null,filter:null,noteBg:null,dark:false,open:null,flash:'',
+    w:typeof window!=='undefined'?window.innerWidth:1200,bw:900,seed:1,pos:{},z:{},top:100,ghosts:[]};
+  componentDidMount(){
+    this._r=()=>this.setState({w:window.innerWidth}); window.addEventListener('resize',this._r);
+    this._k=e=>{ if(e.key==='Escape') this.setState({open:null}); }; window.addEventListener('keydown',this._k);
+    this._mv=e=>{ const d=this.drag; if(!d) return; const dx=e.clientX-d.sx,dy=e.clientY-d.sy; if(Math.abs(dx)+Math.abs(dy)>4) d.moved=true;
+      if(d.moved) this.setState(s=>({pos:{...s.pos,[d.id]:{x:Math.max(-40,d.ox+dx),y:Math.max(10,d.oy+dy)}}})); };
+    this._up=()=>{ const d=this.drag; if(!d) return; this.drag=null; if(!d.moved) this.setState({open:d.id}); };
+    window.addEventListener('pointermove',this._mv); window.addEventListener('pointerup',this._up);
+    if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ this._gk=''; this.measure(); });
+  }
+  componentDidUpdate(){ if(this.boardEl){ const w=this.boardEl.clientWidth; if(w&&Math.abs(w-this.state.bw)>4) this.setState({bw:w}); } this.measure(); }
+  measure(){ const b=this.boardEl; if(!b){ if(this.state.ghosts.length){ this._gk=''; this.setState({ghosts:[]}); } return; }
+    const br=b.getBoundingClientRect(),out=[];
+    b.querySelectorAll('[data-mk="1"]').forEach(el=>{ const card=el.closest('[data-cid]'); if(!card) return; const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
+      out.push({id:card.dataset.cid,rot:card.dataset.rot,t:el.textContent,x:Math.round(r.left+r.width/2-br.left),y:Math.round(r.top+r.height/2-br.top),fs:cs.fontSize,ink:cs.color,bg:cs.backgroundColor,sh:cs.boxShadow}); });
+    const k=JSON.stringify(out); if(k!==this._gk){ this._gk=k; this.setState({ghosts:out}); } }
+  componentWillUnmount(){ clearTimeout(this._ft); ['resize','keydown','pointermove','pointerup'].forEach((ev,i)=>window.removeEventListener(ev,[this._r,this._k,this._mv,this._up][i])); }
+
+  say(msg){ clearTimeout(this._ft); this.setState({flash:msg}); this._ft=setTimeout(()=>this.setState({flash:''}),2600); }
+  addMark(ci){ const el=this.padEl; if(!el){ return; } const a=el.selectionStart,b=el.selectionEnd; const t=this.state.pad.slice(a,b).replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'');
+    if(t.length<2){ this.say('Select a word in your writing first'); return; }
+    this.setState(s=>{ const i=s.marks.findIndex(m=>m.t.toLowerCase()===t.toLowerCase()); const marks=[...s.marks]; if(i>=0) marks[i]={...marks[i],ci}; else marks.push({t,ci}); return {marks}; }); }
+  analyse(text,paras){
+    return splitSentences(text).map(se=>{ const raw=text.slice(se.s,se.e); const tk=tokens(raw); let best=null,bs=0;
+      if(tk.length) paras.forEach(p=>{ if(p.muted) return; const sc=p.tk.filter(a=>tk.some(b=>same(a,b))).length; if(sc>bs){bs=sc;best=p.i;} });
+      const hit=best!=null&&(bs>=2||(bs===1&&tk.length<=3));
+      return {...se,raw,pi:hit?best:null,sc:hit?bs:0}; });
+  }
+  hl(pi,concept,dark){ return concept==='sticky'?(dark?'#F2D22E':YELLOW):hlCol(pi,dark); }
+  build(text,sents,mrs,marks,concept,dark){
+    const hs=[]; sents.forEach(se=>{ if(se.pi==null) return; const lead=se.raw.length-se.raw.trimStart().length, trail=se.raw.length-se.raw.trimEnd().length; if(se.e-trail>se.s+lead) hs.push({s:se.s+lead,e:se.e-trail,pi:se.pi}); });
+    const pts=new Set([0,text.length]); hs.forEach(h=>{pts.add(h.s);pts.add(h.e);}); mrs.forEach(m=>{pts.add(m.s);pts.add(m.e);});
+    const P=[...pts].filter(x=>x>=0&&x<=text.length).sort((a,b)=>a-b), out=[];
+    for(let k=0;k<P.length-1;k++){ const a=P[k],b=P[k+1]; if(b<=a) continue; const t=text.slice(a,b);
+      const m=mrs.find(x=>x.s<=a&&a<x.e), h=hs.find(x=>x.s<=a&&a<x.e);
+      if(m){ const ci=marks[m.mi].ci; out.push({t,bg:mkBg(ci,dark),blend:'normal',pad:'0 2px',fw:'700',sh:'inset 0 -2px 0 '+mkLine(ci),rad:'3px',mk:'1',ws:'nowrap'}); }
+      else if(h) out.push({t,bg:marker(this.hl(h.pi,concept,dark)),blend:concept==='sticky'?'multiply':'normal',pad:'0 2px',fw:'inherit',sh:'none',rad:'0',mk:'',ws:'normal'});
+      else out.push({t,bg:'transparent',blend:'normal',pad:'0',fw:'inherit',sh:'none',rad:'0',mk:'',ws:'normal'}); }
+    return out;
+  }
+  look(n,concept,nb,c,pageDark){
+    const h=hash(n.id);
+    if(concept==='sticky') return {bg:STICKY[n.theme]||STICKY.scrap,ink:INK_L,mu:MU_L,line:'rgba(34,30,26,.15)',dark:false,border:'transparent',radius:'2px',tapeDisp:'none',tape:'transparent',
+      shadow:'0 1px 1px rgba(0,0,0,.08),0 10px 18px -6px rgba(0,0,0,.24)',tapeRot:'0deg'};
+    const o=NOTE_BGS.find(x=>x.id===nb)||NOTE_BGS[0]; const dark=o.id==='paper'?pageDark:!!o.dark; const bg=o.id==='paper'?c.sf:o.bg;
+    return {bg,ink:dark?INK_D:INK_L,mu:dark?MU_D:MU_L,line:dark?'rgba(239,232,220,.14)':'rgba(34,30,26,.12)',dark,border:dark?'rgba(239,232,220,.1)':'rgba(34,30,26,.1)',radius:'4px',tapeDisp:'block',
+      tape:dark?'rgba(239,232,220,.18)':'rgba(34,30,26,.1)',shadow:'0 1px 0 rgba(0,0,0,.04),0 8px 22px rgba(0,0,0,.1)',tapeRot:(((h>>3)%9)-4)+'deg'};
+  }
+  renderVals(){
+    const s=this.state,p=this.props,pageDark=s.dark,c=pageDark?DARK:LIGHT;
+    const concept=s.concept??p.concept??'sticky', view=s.view??p.view??'board', filter=s.filter??p.filterMode??'hide', nb=s.noteBg??p.noteBg??'paper', tilt=p.tilt??true;
+    const D=window.SIFT_DATA||{NOTES:[],THEMES:[]};
+    const topic=id=>(D.THEMES.find(t=>t.id===id)||{}).name||'Scraps';
+    const notes=D.NOTES.filter(n=>!n.private), vaultN=D.NOTES.length-notes.length;
+    const marks=s.marks;
+    const paras=s.pad.split(/\n+/).map(t=>t.trim()).filter(t=>tokens(t).length>=2).map((t,i)=>({i,t,tk:tokens(t),muted:!!s.muted[i]}));
+    const live=paras.some(x=>!x.muted)||marks.length>0;
+    const rows=notes.map(n=>{ const sents=this.analyse(n.text,paras), hits=sents.filter(x=>x.pi!=null), mrs=findMarks(n.text,marks);
+      const score=hits.reduce((a,x)=>a+x.sc,0)+mrs.length*3, mset=[...new Set(mrs.map(m=>m.mi))];
+      return {n,sents,hits,mrs,mset,score,pis:[...new Set(hits.map(x=>x.pi))].sort((a,b)=>a-b)}; });
+    const pass=r=>!live||r.hits.length>0||r.mrs.length>0;
+    rows.sort((a,b)=>(pass(b)-pass(a))||b.score-a.score||b.n.ts-a.n.ts);
+    const shown=filter==='hide'?rows.filter(pass):rows;
+    const matched=rows.filter(pass).length, sentN=rows.reduce((a,r)=>a+r.hits.length,0);
+    const hitLine=r=>{ const parts=[]; if(r.hits.length) parts.push(r.hits.length+' sentence'+(r.hits.length===1?'':'s')+' · paragraph '+r.pis.map(i=>i+1).join(', ')); if(r.mset.length) parts.push(r.mset.map(i=>'“'+marks[i].t+'”').join(', ')); return parts.join(' · '); };
+    const cards=shown.map(r=>{ const n=r.n,h=hash(n.id),L=this.look(n,concept,nb,c,pageDark);
+      return {...L,title:n.title,topic:topic(n.theme),date:fmt(n.ts),rot:tilt?(((h%7)-3)*0.45)+'deg':'0deg',op:pass(r)?1:.35,
+        segs:this.build(n.text,r.sents,r.mrs,marks,concept,L.dark),hasHits:live&&(r.hits.length>0||r.mrs.length>0),
+        dots:[...r.pis.map(i=>({bg:this.hl(i,concept,L.dark)})),...r.mset.map(i=>({bg:mkLine(marks[i].ci)}))],hitLine:hitLine(r),
+        open:()=>this.setState({open:n.id})}; });
+    // scatter: cascading rows so each card's top band stays visible; marked words float in a layer above all notes
+    const bw=Math.max(320,s.bw), cw=bw<520?220:250, perRow=Math.max(1,Math.floor((bw-cw)/(cw*0.7))+1), stepX=perRow>1?(bw-cw)/(perRow-1):0, stepY=128;
+    let maxY=0; const scat=[],flags=[]; this._downs={};
+    shown.forEach((r,idx)=>{ const n=r.n,h=hash(n.id)+s.seed*977,L=this.look(n,concept,nb,c,pageDark),ok=pass(r);
+      const row=Math.floor(idx/perRow),col=idx%perRow,shift=row%2?stepX*0.5:0;
+      const auto={x:Math.round(Math.min(bw-cw+10,Math.max(-6,col*stepX+shift-(row%2&&col===perRow-1?stepX:0)+(rnd(h)-.5)*40))),y:Math.round(30+row*stepY+rnd(h+3)*28)};
+      const at=s.pos[n.id]||auto; maxY=Math.max(maxY,at.y);
+      const rot=tilt?((rnd(h+7)-.5)*8).toFixed(1)+'deg':'0deg';
+      const down=e=>{ e.preventDefault(); this.drag={id:n.id,sx:e.clientX,sy:e.clientY,ox:at.x,oy:at.y,moved:false}; this.setState(st=>({top:st.top+1,z:{...st.z,[n.id]:st.top+1}})); };
+      let picks=r.hits.length?[...r.hits].sort((a,b)=>b.sc-a.sc).slice(0,3).sort((a,b)=>a.s-b.s):[];
+      const mOnly=r.mrs.filter(m=>!picks.some(x=>x.s<=m.s&&m.s<x.e)).slice(0,2-Math.min(2,picks.length)+1);
+      mOnly.forEach(m=>{ const se=r.sents.find(x=>x.s<=m.s&&m.s<x.e); if(se&&!picks.includes(se)) picks.push(se); }); picks.sort((a,b)=>a.s-b.s);
+      let pk=picks.slice(0,3).map(se=>{ const lead=se.raw.length-se.raw.trimStart().length, t=se.raw.trim(), off=se.s+lead;
+        const mm=r.mrs.filter(m=>m.s>=off&&m.e<=off+t.length).map(m=>({...m,s:m.s-off,e:m.e-off}));
+        return {segs:this.build(t,[{s:0,e:t.length,raw:t,pi:se.pi}],mm,marks,concept,L.dark)}; });
+      if(!pk.length){ const t0=n.text.replace(/\s+/g,' ').trim(), t=t0.length>140?t0.slice(0,140)+'…':t0; pk=[{segs:[{t,bg:'transparent',blend:'normal',pad:'0',fw:'inherit',sh:'none',rad:'0',mk:'',ws:'normal'}]}]; }
+      this._downs[n.id]=down;
+      scat.push({...L,id:n.id,title:n.title,date:fmt(n.ts),x:at.x+'px',y:at.y+'px',w:cw+'px',minH:concept==='sticky'?Math.round(cw*0.8)+'px':'0',
+        z:s.z[n.id]||(ok?50:1)+idx,rot,op:ok?1:.4,fs:pk.length>2?'15px':'17px',picks:pk,down});
+      if(ok&&r.mset.length) flags.push({x:(at.x+12)+'px',y:(at.y-14)+'px',w:(cw-20)+'px',rot,down,items:r.mset.slice(0,3).map(i=>({t:marks[i].t,bg:mkBg(marks[i].ci,false),line:mkLine(marks[i].ci)}))});
+    });
+    const padMarks=findMarks(s.pad,marks), padSegs=[]; let pp=0;
+    padMarks.forEach(m=>{ if(m.s>pp) padSegs.push({t:s.pad.slice(pp,m.s),bg:'transparent',sh:'none'}); const ci=marks[m.mi].ci; padSegs.push({t:s.pad.slice(m.s,m.e),bg:mkBg(ci,false),sh:'0 0 0 2px '+mkBg(ci,false)+', inset 0 -2px 0 '+mkLine(ci)}); pp=m.e; });
+    padSegs.push({t:s.pad.slice(pp)+'\n ',bg:'transparent',sh:'none'});
+    const on=s.open&&rows.find(r=>r.n.id===s.open);
+    const opt=(cur,v,label,fn)=>({label,bg:cur===v?c.ink:'transparent',color:cur===v?c.bg:c.ink,pick:fn});
+    const narrow=s.w<860;
+    const OL=on?this.look(on.n,concept,nb,c,pageDark):{};
+    return {c,cols:narrow?'minmax(0,1fr)':'minmax(280px,360px) minmax(0,1fr)',padPos:narrow?'static':'sticky',
+      pad:s.pad,setPad:e=>this.setState({pad:e.target.value}),padRef:el=>{ this.padEl=el; },padSegs,
+      clear:()=>this.setState({pad:'',muted:{},marks:[]}),
+      paste:async()=>{ try{ const t=await navigator.clipboard.readText(); if(t) this.setState({pad:t,muted:{}}); }catch(e){} },
+      markColors:MK.map((m,i)=>({label:'Mark in '+m.label.toLowerCase(),bg:mkBg(i,false),line:mkLine(i),down:e=>{ e.preventDefault(); this.addMark(i); }})),
+      flash:s.flash,hasMarks:marks.length>0,
+      marks:marks.map((m,i)=>{ const nN=rows.filter(r=>r.mset.includes(i)).length;
+        return {t:m.t,n:nN,bg:mkBg(m.ci,false),line:mkLine(m.ci),
+          cycle:()=>this.setState(st=>({marks:st.marks.map((x,j)=>j===i?{...x,ci:(x.ci+1)%MK.length}:x)})),
+          remove:()=>this.setState(st=>({marks:st.marks.filter((x,j)=>j!==i)}))}; }),
+      hasParas:paras.length>0,
+      paras:paras.map(x=>{ const nN=rows.filter(r=>r.pis.includes(x.i)).length, sN=rows.reduce((a,r)=>a+r.hits.filter(h=>h.pi===x.i).length,0);
+        return {excerpt:x.t.length>90?x.t.slice(0,90)+'…':x.t,stat:x.muted?'Off':(sN+' sentence'+(sN===1?'':'s')+' in '+nN+' note'+(nN===1?'':'s')),
+          swatch:x.muted?c.sf2:this.hl(x.i,concept,pageDark),op:x.muted?.55:1,deco:x.muted?'line-through':'none',
+          toggle:()=>this.setState(st=>({muted:{...st.muted,[x.i]:!st.muted[x.i]}}))}; }),
+      countLine:live?(matched+' of '+notes.length+' notes · '+sentN+' sentences'):notes.length+' notes',
+      conceptOpts:[opt(concept,'sticky','A · Sticky notes',()=>this.setState({concept:'sticky'})),opt(concept,'marker','B · Highlighters',()=>this.setState({concept:'marker'}))],
+      isMarker:concept==='marker',
+      bgOpts:NOTE_BGS.map(o=>({label:o.label,bg:o.id==='paper'?c.sf:o.bg,ring:nb===o.id?'0 0 0 2px var(--sf), 0 0 0 4px var(--ac)':'none',pick:()=>this.setState({noteBg:o.id})})),
+      viewOpts:[opt(view,'board','Board',()=>this.setState({view:'board'})),opt(view,'scatter','Scatter',()=>this.setState({view:'scatter'}))],
+      filterOpts:[opt(filter,'hide','Hide others',()=>this.setState({filter:'hide'})),opt(filter,'dim','Dim others',()=>this.setState({filter:'dim'}))],
+      isBoard:view==='board',isScatter:view==='scatter',cards,scat,flags,
+      ghosts:view==='scatter'?s.ghosts.map(g=>({...g,x:g.x+'px',y:g.y+'px',sh:(g.sh&&g.sh!=='none'?g.sh+', ':'')+'0 3px 10px rgba(0,0,0,.25)',down:this._downs[g.id]||(()=>{})})):[],
+      boardRef:el=>{ this.boardEl=el; },boardH:Math.max(560,maxY+cw+140)+'px',
+      boardBg:concept==='sticky'?(pageDark?'#2A241F':'#D9CDB8'):'var(--sf2)',
+      shuffle:()=>this.setState(st=>({seed:st.seed+1,pos:{},z:{}})),
+      isEmpty:live&&matched===0&&filter==='hide',
+      hasVaultNote:vaultN>0,vaultNote:vaultN+' vault note'+(vaultN===1?' is':'s are')+' left out of the collage.',
+      hasOpen:!!on,close:()=>this.setState({open:null}),stop:e=>e.stopPropagation(),
+      op:on?{bg:OL.bg,ink:OL.ink,mu:OL.mu,line:OL.line,radius:concept==='sticky'?'4px':'16px',title:on.n.title,topic:topic(on.n.theme),date:fmt(on.n.ts),
+        segs:this.build(on.n.text,on.sents,on.mrs,marks,concept,OL.dark),
+        hitLine:live?(hitLine(on)||'Nothing here matches your writing.'):'Nothing written yet.'}:{segs:[]},
+      toggleDark:()=>this.setState({dark:!pageDark}),sunBg:pageDark?'transparent':c.ink,sunShadow:pageDark?'inset -4px -2px 0 0 '+c.ink:'none'};
+  }
+}
+</script>
+</body>
+</html>
