@@ -1,5 +1,5 @@
 import { useStore } from '../state/store';
-import { useConflicts, useIndex, useIsMobile, useNotes, usePalette } from '../state/derived';
+import { useConflicts, useIndex, useIsMobile, useNotes, useOwnHighlights, usePalette } from '../state/derived';
 import { SIM_RELATED } from '../similarity';
 import { MONO, NO_AI, SANS, SERIF, topicColor } from '../lib/config';
 import { fmtLong } from '../lib/format';
@@ -7,12 +7,19 @@ import { useImageUrl } from '../hooks/useImageUrl';
 import { NoteChips } from '../screens/Stream';
 import { Check, ghostBtn } from './ui';
 import { Highlighted, useCollageSheet } from './CollageText';
-import type { CSSProperties } from 'react';
+import { HighlightableBody } from './HighlightToolbar';
+import { segments } from '../lib/collage';
+import type { Anchored } from '../lib/highlights';
+import { useRef, type CSSProperties } from 'react';
+
+const NONE: Anchored[] = [];
 
 export function NoteSheet() {
   const st = useStore(); const { c, dark } = usePalette(); const mobile = useIsMobile(); const { byId, open } = useNotes(); const index = useIndex(); const conflicts = useConflicts();
   const n = st.selId ? byId[st.selId] : null; const img = useImageUrl(n?.image_path);
-  const coll = useCollageSheet(st.view === 'collage' && n && !n.hidden ? n : null);
+  const ownBy = useOwnHighlights(); const own = (n && ownBy[n.id]) || NONE;
+  const coll = useCollageSheet(st.view === 'collage' && n && !n.hidden ? n : null, own);
+  const downOnBackdrop = useRef(false);
   if (!n || n.hidden) return null;
   // From Collage the sheet takes the card's colours: rebind the theme variables inside the dialog.
   const L = coll?.look; const ink = L ? L.ink : c.ink, mu = L ? L.mu : c.mu;
@@ -22,7 +29,8 @@ export function NoteSheet() {
   const close = () => st.set({ selId: null });
   const toggleVault = () => { void st.updateNote(n.id, { vault: !n.vault }); if (!n.vault && !st.unlocked) close(); };
 
-  return <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,16,12,.38)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', display: 'flex', justifyContent: 'center', alignItems: mobile ? 'flex-end' : 'center', padding: mobile ? '40px 0 0' : 32, overflow: 'auto' }}>
+  // Close on a backdrop click only — not when a text selection that started in the sheet ends on the backdrop.
+  return <div onPointerDown={e => { downOnBackdrop.current = e.target === e.currentTarget; }} onClick={e => { if (downOnBackdrop.current && e.target === e.currentTarget) close(); }} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,16,12,.38)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', display: 'flex', justifyContent: 'center', alignItems: mobile ? 'flex-end' : 'center', padding: mobile ? '40px 0 0' : 32, overflow: 'auto' }}>
     <section role="dialog" aria-modal="true" aria-label={n.title} onClick={e => e.stopPropagation()} style={{ ...tone, width: '100%', maxWidth: 720, background: 'var(--sf)', borderRadius: mobile ? '22px 22px 0 0' : 22, boxShadow: '0 30px 80px rgba(0,0,0,.3)', animation: 'siftin .22s ease-out', display: 'flex', flexDirection: 'column', maxHeight: mobile ? 'calc(100vh - 40px)' : 'calc(100vh - 64px)', overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderBottom: '1px solid var(--ln)', position: 'sticky', top: 0, background: 'var(--sf)', zIndex: 1, flexWrap: 'wrap' }}>
         <button className="h-sf2" onClick={close} style={{ border: 0, background: 'transparent', padding: '4px 8px', borderRadius: 6, color: 'var(--mu)', fontSize: 13 }}>Esc · Close</button>
@@ -66,10 +74,12 @@ export function NoteSheet() {
           </div>
         </div>}
         {img && <div role="img" aria-label="Attached image" style={{ width: '100%', height: 300, borderRadius: 14, border: '1px solid var(--ln)', background: `var(--bg) url("${img}") center/contain no-repeat` }} />}
-        {coll ? <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: SERIF, fontSize: 18, lineHeight: 1.65, textWrap: 'pretty' }}><Highlighted segs={coll.segs} concept={coll.concept} dark={coll.look.dark} /></div>
-          <div style={{ fontSize: 12, color: 'var(--mu)', paddingTop: 10, borderTop: '1px solid var(--ln)' }}>{coll.line}</div>
-        </div> : <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: SERIF, fontSize: 18, lineHeight: 1.65, textWrap: 'pretty' }}>{n.body}</pre>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <HighlightableBody noteId={n.id} text={n.body} own={own} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: SERIF, fontSize: 18, lineHeight: 1.65, textWrap: 'pretty' }}>
+            <Highlighted segs={coll ? coll.segs : segments(n.body, [], [], [], own)} concept={coll?.concept} dark={coll ? coll.look.dark : dark} />
+          </HighlightableBody>
+          {coll && <div style={{ fontSize: 12, color: 'var(--mu)', paddingTop: 10, borderTop: '1px solid var(--ln)' }}>{coll.line}</div>}
+        </div>
         {conflict && <button onClick={() => st.go('conflicts')} style={{ alignSelf: 'flex-start', padding: '8px 14px', border: '1px solid var(--ac)', borderRadius: 999, background: 'var(--acs)', color: 'var(--ac)', fontSize: 12 }}>A near-duplicate exists → review</button>}
       </div>
     </section>

@@ -3,7 +3,8 @@ import { useStore } from '../state/store';
 import { usePalette } from '../state/derived';
 import { MONO, SERIF, topicName } from '../lib/config';
 import { plural } from '../lib/format';
-import { findMarks, hash, hitLine, hl, look, MK, mkBg, mkLine, NOTE_BGS, rnd, segments, type Para, type Seg } from '../lib/collage';
+import { cutSegs, findMarks, hash, hitLine, hl, look, MK, mkBg, mkLine, NOTE_BGS, rnd, segments, type Para, type Seg } from '../lib/collage';
+import { ownColor } from '../lib/highlights';
 import { Highlighted, useCollageRows, type CollageRow } from '../components/CollageText';
 import { eyebrowStyle } from '../components/ui';
 import type { CollageMark } from '../types';
@@ -30,8 +31,8 @@ function Switch<T extends string>({ value, opts, onPick, label }: { value: T; op
 export function Collage() {
   const cfg = useStore(s => s.collage), setCollage = useStore(s => s.setCollage); const { c } = usePalette(); const wide = useWide();
   const { rows, paras, marks, live, lockedCount } = useCollageRows();
-  const shown = cfg.filter === 'hide' ? rows.filter(r => r.ok) : rows;
-  const matched = rows.filter(r => r.ok).length, sentN = rows.reduce((a, r) => a + r.m.hits.length, 0);
+  const shown = cfg.filter === 'own' ? rows.filter(r => r.own.length) : cfg.filter === 'hide' ? rows.filter(r => r.ok) : rows;
+  const matched = rows.filter(r => r.ok).length, sentN = rows.reduce((a, r) => a + r.m.hits.length, 0), ownN = rows.filter(r => r.own.length).length;
 
   return <>
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 14px' }}>
@@ -43,16 +44,20 @@ export function Collage() {
           style={{ width: 20, height: 20, borderRadius: '50%', padding: 0, background: o.bg ?? c.sf, border: '1px solid rgba(0,0,0,.18)', boxShadow: cfg.noteBg === o.id ? '0 0 0 2px var(--sf), 0 0 0 4px var(--ac)' : 'none' }} />)}
       </div>}
       <div style={{ flex: 1 }} />
-      <span style={{ fontSize: 13, color: 'var(--mu)' }}>{live ? `${matched} of ${plural(rows.length, 'note')} · ${plural(sentN, 'sentence')}` : plural(rows.length, 'note')}</span>
+      <span style={{ fontSize: 13, color: 'var(--mu)' }}>{cfg.filter === 'own' ? `${ownN} of ${plural(rows.length, 'note')} with your highlights`
+        : live ? `${matched} of ${plural(rows.length, 'note')} · ${plural(sentN, 'sentence')}` : plural(rows.length, 'note')}</span>
       <Switch label="View" value={cfg.view} opts={[['board', 'Board'], ['scatter', 'Scatter']]} onPick={view => setCollage({ view })} />
-      <Switch label="Other notes" value={cfg.filter} opts={[['hide', 'Hide others'], ['dim', 'Dim others']]} onPick={filter => setCollage({ filter })} />
+      <Switch label="Other notes" value={cfg.filter} opts={[['hide', 'Hide others'], ['dim', 'Dim others'], ['own', 'Only my highlights']]} onPick={filter => setCollage({ filter })} />
       <button className="h-ac" aria-pressed={cfg.tilt} onClick={() => setCollage({ tilt: !cfg.tilt })} style={{ ...smallBtn, padding: '6px 12px', background: 'var(--sf)', color: cfg.tilt ? 'var(--ink)' : 'var(--mu)' }}>Tilt {cfg.tilt ? 'on' : 'off'}</button>
     </div>
 
     <div style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(280px,360px) minmax(0,1fr)' : 'minmax(0,1fr)', gap: 28, alignItems: 'start', marginTop: -16 }}>
       <Pad rows={rows} paras={paras} sticky={wide} />
       <section aria-label="Matching notes" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {live && matched === 0 && cfg.filter === 'hide' ? <div style={{ padding: '48px 24px', border: '1px dashed var(--ln)', borderRadius: 16, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+        {cfg.filter === 'own' && !ownN && rows.length ? <div style={{ padding: '48px 24px', border: '1px dashed var(--ln)', borderRadius: 16, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontFamily: SERIF, fontSize: 22 }}>No highlights yet</span>
+          <span style={{ color: 'var(--mu)' }}>Open a note and select some text to highlight it.</span>
+        </div> : live && matched === 0 && cfg.filter === 'hide' ? <div style={{ padding: '48px 24px', border: '1px dashed var(--ln)', borderRadius: 16, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
           <span style={{ fontFamily: SERIF, fontSize: 22 }}>No note says anything like this yet</span>
           <span style={{ color: 'var(--mu)' }}>Try another paragraph, or turn on the ones you switched off.</span>
         </div> : !rows.length ? <p style={{ margin: 0, fontFamily: SERIF, fontSize: 22, fontStyle: 'italic', color: 'var(--mu)' }}>No notes yet.</p>
@@ -135,7 +140,7 @@ function Pad({ rows, paras, sticky }: { rows: CollageRow[]; paras: Para[]; stick
 function Board({ shown, marks, live }: { shown: CollageRow[]; marks: CollageMark[]; live: boolean }) {
   const cfg = useStore(s => s.collage), openNote = useStore(s => s.openNote); const { c, dark } = usePalette();
   return <div style={{ columnWidth: 260, columnGap: 22 }}>
-    {shown.map(({ n, m, ok }) => { const L = look(n.id, n.topic, cfg, c, dark);
+    {shown.map(({ n, m, own, ok }) => { const L = look(n.id, n.topic, cfg, c, dark); const line = [live && ok ? hitLine(m, marks) : '', own.length ? plural(own.length, 'highlight') : ''].filter(Boolean).join(' · ');
       return <button key={n.id} onClick={() => openNote(n.id)} style={{ position: 'relative', display: 'block', width: '100%', breakInside: 'avoid', margin: '10px 0 24px', padding: '20px 18px 16px',
         border: '1px solid ' + L.border, borderRadius: L.radius, background: L.bg, color: L.ink, textAlign: 'left', boxShadow: L.shadow,
         transform: `rotate(${cfg.tilt ? ((hash(n.id) % 7) - 3) * 0.45 : 0}deg)`, opacity: ok ? 1 : .35, transition: 'opacity .3s,box-shadow .2s,background .2s' }}>
@@ -145,12 +150,13 @@ function Board({ shown, marks, live }: { shown: CollageRow[]; marks: CollageMark
         </span>
         <span style={{ display: 'block', fontFamily: SERIF, fontSize: 19, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-.01em', marginBottom: 8, textWrap: 'pretty' }}>{n.title || 'Untitled'}</span>
         <span style={{ display: 'block', fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
-          <Highlighted segs={segments(n.body, m.sents, m.mrs, marks)} concept={cfg.concept} dark={L.dark} />
+          <Highlighted segs={segments(n.body, m.sents, m.mrs, marks, own)} concept={cfg.concept} dark={L.dark} />
         </span>
-        {live && ok && <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 12 }}>
-          {m.pis.map(i => <span key={'p' + i} style={{ width: 8, height: 8, borderRadius: 2, background: hl(i, cfg.concept, L.dark) }} />)}
-          {m.mset.map(i => <span key={'m' + i} style={{ width: 8, height: 8, borderRadius: 2, background: mkLine(marks[i].ci) }} />)}
-          <span style={{ marginLeft: 4, fontSize: 11, color: L.mu }}>{hitLine(m, marks)}</span>
+        {line && <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 12 }}>
+          {[...new Set(own.map(o => o.color))].map(k => <span key={'o' + k} style={{ width: 8, height: 8, borderRadius: 2, background: ownColor(k, L.dark) }} />)}
+          {live && m.pis.map(i => <span key={'p' + i} style={{ width: 8, height: 8, borderRadius: 2, background: hl(i, cfg.concept, L.dark) }} />)}
+          {live && m.mset.map(i => <span key={'m' + i} style={{ width: 8, height: 8, borderRadius: 2, background: mkLine(marks[i].ci) }} />)}
+          <span style={{ marginLeft: 4, fontSize: 11, color: L.mu }}>{line}</span>
         </span>}
       </button>; })}
   </div>;
@@ -160,16 +166,21 @@ function Board({ shown, marks, live }: { shown: CollageRow[]; marks: CollageMark
 interface Ghost { id: string; rot: number; t: string; x: number; y: number; fs: string; ink: string; bg: string; sh: string; }
 interface Drag { id: string; sx: number; sy: number; ox: number; oy: number; x: number; y: number; moved: boolean; }
 
-/** Up to 3 sentences worth showing: top scores plus sentences holding marks, in original order. */
-function picksFor({ n, m }: CollageRow, marks: CollageMark[]): Seg[][] {
+/** Up to 3 passages worth showing: the user's own highlights first (widened to whole sentences, in text order),
+ *  then top-scoring sentences and sentences holding marks, in text order. */
+function picksFor({ n, m, own }: CollageRow, marks: CollageMark[]): Seg[][] {
+  const at = (i: number) => m.sents.find(x => x.s <= i && i < x.e);
+  const ranges: { s: number; e: number }[] = [];
+  const add = (s: number, e: number) => { if (ranges.length < 3 && !ranges.some(r => r.s < e && s < r.e)) ranges.push({ s, e }); };
+  own.forEach(o => add(at(o.s)?.s ?? o.s, at(o.e - 1)?.e ?? o.e));
+  const first = ranges.length, rest: { s: number; e: number }[] = [];
   const picks = [...m.hits].sort((a, b) => b.sc - a.sc).slice(0, 3);
   m.mrs.filter(h => !picks.some(x => x.s <= h.s && h.s < x.e)).slice(0, 3 - Math.min(2, picks.length))
-    .forEach(h => { const se = m.sents.find(x => x.s <= h.s && h.s < x.e); if (se && !picks.includes(se)) picks.push(se); });
-  const out = picks.sort((a, b) => a.s - b.s).slice(0, 3).map(se => {
-    const t = se.raw.trim(), off = se.s + se.raw.length - se.raw.trimStart().length;
-    const mm = m.mrs.filter(h => h.s >= off && h.e <= off + t.length).map(h => ({ ...h, s: h.s - off, e: h.e - off }));
-    return segments(t, [{ s: 0, e: t.length, raw: t, pi: se.pi }], mm, marks);
-  });
+    .forEach(h => { const se = at(h.s); if (se && !picks.includes(se)) picks.push(se); });
+  picks.sort((a, b) => a.s - b.s).forEach(se => { const before = ranges.length; add(se.s, se.e); if (ranges.length > before) rest.push(ranges.pop()!); });
+  rest.slice(0, 3 - first).forEach(r => ranges.push(r));
+  const all = segments(n.body, m.sents, m.mrs, marks, own);
+  const out = ranges.map(r => cutSegs(all, r.s, r.e)).filter(g => g.length);
   if (out.length) return out;
   const t0 = n.body.replace(/\s+/g, ' ').trim();
   return [[{ t: t0.length > 140 ? t0.slice(0, 140) + '…' : t0, kind: 'plain' }]];

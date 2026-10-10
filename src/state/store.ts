@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CollageSettings, ConflictDismissal, Digest, ImportFile, LayoutKind, LayoutRow, Note, Profile, Settings, Todo, Topic, WfEntry, WfItemPayload, WfMutation } from '../types';
+import type { CollageSettings, ConflictDismissal, Digest, Highlight, HighlightColor, ImportFile, LayoutKind, LayoutRow, Note, Profile, Settings, Todo, Topic, WfEntry, WfItemPayload, WfMutation } from '../types';
 import { db, getMeta, openDb, setMeta, type QueueOp, type SyncTable } from '../lib/db';
 import { cloud, LOCAL_USER, supabase } from '../lib/supabase';
 import { enqueue, fetchAll, fetchWf, flush, pendingCount, setSyncHandlers, subscribe, wireBackgroundFlush } from '../lib/sync';
@@ -8,6 +8,7 @@ import { nowIso, uid } from '../lib/format';
 import { sha256 } from '../keepImport';
 import { WF_BOARD } from '../lib/config';
 import { DEFAULT_COLLAGE } from '../lib/collage';
+import { anchor, anchorAll } from '../lib/highlights';
 import wfSample from '../../supabase/weekly_focus_sample.json';
 
 export type View = 'stream' | 'week' | 'map' | 'collage' | 'lens' | 'todos' | 'conflicts' | 'archive';
@@ -38,7 +39,7 @@ let collageTimer: ReturnType<typeof setTimeout> | undefined;
 
 interface State {
   phase: 'boot' | 'signedOut' | 'ready'; userId: string; profile: Profile | null;
-  notes: Record<string, Note>; todos: Record<string, Todo>; layout: Record<LayoutKind, Positions>;
+  notes: Record<string, Note>; todos: Record<string, Todo>; highlights: Record<string, Highlight>; layout: Record<LayoutKind, Positions>;
   wf: Record<string, WfEntry>; wfSyncedAt: number; dismissed: Record<string, true>; digests: Record<string, Digest>; settings: Settings;
   pending: number; error: string | null; hasPin: boolean; pinIsDemo: boolean;
   view: View; filter: string; query: string; selId: string | null; unlocked: boolean; collage: CollageSettings;
@@ -70,6 +71,9 @@ interface State {
   setSettings(p: Partial<Settings>): Promise<void>;
   /** Update Collage state now; saved to sift_settings.collage 600 ms after the last change. */
   setCollage(p: Partial<CollageSettings>): void;
+  /** Highlight body[s, e) of a note. Inside an existing highlight: recolour it; overlapping ones are merged into one. */
+  addHighlight(noteId: string, s: number, e: number, color: HighlightColor): Promise<void>;
+  removeHighlight(id: string): Promise<void>;
   /** New scatter seed: forgets the old shuffle's positions and saves the seed right away. */
   shuffleCollage(): Promise<void>;
   refreshLinks(): Promise<void>;
@@ -81,12 +85,31 @@ export const useStore = create<State>()((set, get) => {
   const upsertOp = (table: SyncTable, row: object): QueueOp => ({ kind: 'upsert', table, row: row as Record<string, unknown> });
   const saveOpened = (o: Record<string, true>) => { try { localStorage.setItem('sift-opened-' + get().userId, JSON.stringify(o)); } catch { /* storage unavailable */ } };
 
+  /** After note text changes: move highlights to where their quote now sits, and drop those whose quote is gone. */
+  async function reanchor(noteIds: Set<string>) {
+    const st = get(); const moved: Highlight[] = [], gone: string[] = [];
+    Object.values(st.highlights).forEach(h => {
+      const n = st.notes[h.note_id]; if (!noteIds.has(h.note_id) || !n) return;
+      const at = anchor(n.body, h); if (at == null) gone.push(h.id); else if (at !== h.start) moved.push({ ...h, start: at, updated_at: nowIso() });
+    });
+    if (!moved.length && !gone.length) return;
+    const next = { ...get().highlights }; moved.forEach(h => { next[h.id] = h; }); gone.forEach(id => { delete next[id]; }); set({ highlights: next });
+    await db().highlights.bulkPut(moved); await db().highlights.bulkDelete(gone);
+    await persist([...moved.map(h => upsertOp('sift_highlights', h)), ...gone.map((id): QueueOp => ({ kind: 'delete', table: 'sift_highlights', match: { id } }))]);
+  }
+
   async function applyRemote(table: SyncTable, row: Record<string, unknown>, deleted: boolean) {
     if (table === 'sift_notes') {
       const id = row.id as string, local = get().notes[id];
       if (deleted) { if (!local) return; const { [id]: _, ...rest } = get().notes; set({ notes: rest }); await db().notes.delete(id); return; }
       if (!newer(row as unknown as Note, local)) return;
       set({ notes: { ...get().notes, [id]: row as unknown as Note } }); await db().notes.put(row as unknown as Note);
+      if (local && local.body !== row.body) await reanchor(new Set([id]));
+    } else if (table === 'sift_highlights') {
+      const id = row.id as string, local = get().highlights[id];
+      if (deleted) { if (!local) return; const { [id]: _, ...rest } = get().highlights; set({ highlights: rest }); await db().highlights.delete(id); return; }
+      if (!newer(row as unknown as Highlight, local)) return;
+      set({ highlights: { ...get().highlights, [id]: row as unknown as Highlight } }); await db().highlights.put(row as unknown as Highlight);
     } else if (table === 'sift_todos') {
       const id = row.id as string, local = get().todos[id];
       if (deleted) { if (!local) return; const { [id]: _, ...rest } = get().todos; set({ todos: rest }); await db().todos.delete(id); return; }
@@ -121,6 +144,7 @@ export const useStore = create<State>()((set, get) => {
         fetchAll<Note>('sift_notes', user), fetchAll<Todo>('sift_todos', user), fetchAll<LayoutRow>('sift_note_layout', user), fetchAll<Digest>('sift_digests', user),
         fetchAll<Settings>('sift_settings', user), fetchAll<ConflictDismissal>('sift_conflict_dismissals', user).catch(() => []), fetchAll<ImportFile>('sift_import_files', user),
       ]);
+      const hls = await fetchAll<Highlight>('sift_highlights', user).catch(() => null); // null: table not migrated yet, keep the local cache
       const mergeRows = <T extends { id: string; updated_at?: string }>(local: Record<string, T>, remote: T[]) => {
         const out: Record<string, T> = {}; const seen = new Set<string>();
         remote.forEach(r => { seen.add(r.id); out[r.id] = newer(r, local[r.id]) ? r : local[r.id]; });
@@ -128,22 +152,24 @@ export const useStore = create<State>()((set, get) => {
         return out;
       };
       const st = get();
-      const n = mergeRows(st.notes, notes), t = mergeRows(st.todos, todos);
+      const n = mergeRows(st.notes, notes), t = mergeRows(st.todos, todos), hl = hls ? mergeRows(st.highlights, hls) : st.highlights;
       const seed = collageSeed(settings[0] ? { ...st.settings, ...settings[0] } : st.settings);
       const lay = groupLayout(layout, seed);
       (Object.keys(lay) as LayoutKind[]).forEach(k => Object.entries(st.layout[k]).forEach(([id, p]) => { if (pendingIds.has(id)) lay[k][id] = p; }));
       const layRows = (Object.keys(lay) as LayoutKind[]).flatMap(k => Object.entries(lay[k]).map(([note_id, p]): LayoutRow => ({ user_id: user, note_id, layout: k, seed: k === 'collage' ? seed : 0, ...p })));
-      await db().transaction('rw', [db().notes, db().todos, db().layouts, db().digests, db().dismissals, db().importFiles], async () => {
+      await db().transaction('rw', [db().notes, db().todos, db().highlights, db().layouts, db().digests, db().dismissals, db().importFiles], async () => {
         await db().notes.clear(); await db().notes.bulkPut(Object.values(n));
         await db().todos.clear(); await db().todos.bulkPut(Object.values(t));
+        await db().highlights.clear(); await db().highlights.bulkPut(Object.values(hl));
         await db().layouts.clear(); await db().layouts.bulkPut(layRows);
         await db().digests.bulkPut(digests); await db().dismissals.bulkPut(dismissals); await db().importFiles.bulkPut(files);
       });
-      set({ notes: n, todos: t, layout: lay, digests: { ...st.digests, ...byId(digests, d => d.week_of) },
+      set({ notes: n, todos: t, highlights: hl, layout: lay, digests: { ...st.digests, ...byId(digests, d => d.week_of) },
         dismissed: { ...st.dismissed, ...Object.fromEntries(dismissals.map(d => [pairKey(d.a, d.b), true as const])) },
         settings: settings[0] ? { ...st.settings, ...settings[0] } : st.settings,
         ...(settings[0]?.collage && !collageTimer ? { collage: collageOf(settings[0]) } : {}) });
       if (!settings[0]) await persist([upsertOp('sift_settings', st.settings)]);
+      await reanchor(new Set(Object.values(hl).map(h => h.note_id)));
       const wf = await fetchWf(); for (const e of wf) await applyWfEntry(e);
       const has = await supabase.rpc('sift_has_pin'); if (!has.error) set({ hasPin: !!has.data });
     } catch (e) { set({ error: 'Could not reach Supabase: ' + ((e as Error).message || e) }); }
@@ -151,15 +177,15 @@ export const useStore = create<State>()((set, get) => {
 
   return {
     phase: 'boot', userId: '', profile: null,
-    notes: {}, todos: {}, layout: NO_LAYOUT(), wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
+    notes: {}, todos: {}, highlights: {}, layout: NO_LAYOUT(), wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
     pending: 0, error: null, hasPin: true, pinIsDemo: false,
     view: 'stream', filter: 'all', query: '', selId: null, unlocked: false, collage: DEFAULT_COLLAGE, pin: { open: false, mode: 'enter', after: null }, toast: null, importOpen: false,
     ambient: false, opened: {}, sessionNew: {}, composerFocused: false, sendFor: null, sendItem: null, week: null, map: { zoom: 1, pan: { x: 0, y: 0 }, topic: null, hover: null, placed: null, dragging: null },
 
     async init(user, profile = null) {
       const d = openDb(user);
-      const [notes, todos, layout, wf, digests, dismissals, settings] = await Promise.all([
-        d.notes.toArray(), d.todos.toArray(), d.layouts.toArray(), d.wf.toArray(), d.digests.toArray(), d.dismissals.toArray(), getMeta<Settings | null>('settings', null)]);
+      const [notes, todos, highlights, layout, wf, digests, dismissals, settings] = await Promise.all([
+        d.notes.toArray(), d.todos.toArray(), d.highlights.toArray(), d.layouts.toArray(), d.wf.toArray(), d.digests.toArray(), d.dismissals.toArray(), getMeta<Settings | null>('settings', null)]);
       let opened: Record<string, true> = {}; try { opened = JSON.parse(localStorage.getItem('sift-opened-' + user) || '{}'); } catch { /* fresh */ }
       let wfRows = wf;
       if (!cloud && !wfRows.length) { wfRows = (wfSample.rows as { item_key: string; payload: unknown }[]).map(r => ({ board_id: WF_BOARD, item_key: r.item_key, payload: r.payload } as WfEntry)); await d.wf.bulkPut(wfRows); }
@@ -167,7 +193,7 @@ export const useStore = create<State>()((set, get) => {
       if (!cloud && !(await getMeta<string | null>('pinHash', null))) { await setMeta('pinHash', await sha256(LOCAL_SALT + '0000')); await setMeta('pinIsDemo', true); }
       if (!cloud) pinIsDemo = await getMeta('pinIsDemo', false);
       set({
-        phase: 'ready', userId: user, profile, notes: byId(notes, n => n.id), todos: byId(todos, t => t.id),
+        phase: 'ready', userId: user, profile, notes: byId(notes, n => n.id), todos: byId(todos, t => t.id), highlights: byId(highlights, h => h.id),
         layout: groupLayout(layout, collageSeed(settings)), wf: byId(wfRows, e => e.item_key),
         digests: byId(digests, x => x.week_of), dismissed: Object.fromEntries(dismissals.map(x => [pairKey(x.a, x.b), true as const])),
         settings: settings ?? DEFAULT_SETTINGS(user), collage: collageOf(settings), opened, pinIsDemo, unlocked: sessionStorage.getItem('sift-unlocked') === user,
@@ -182,7 +208,7 @@ export const useStore = create<State>()((set, get) => {
       wireBackgroundFlush(); subscribe(user); await flush(); await pull(user);
       set({ pending: await pendingCount() });
     },
-    setSignedOut: () => { clearTimeout(collageTimer); collageTimer = undefined; set({ phase: 'signedOut', userId: '', collage: DEFAULT_COLLAGE, notes: {}, todos: {}, layout: NO_LAYOUT(), wf: {}, unlocked: false, selId: null }); },
+    setSignedOut: () => { clearTimeout(collageTimer); collageTimer = undefined; set({ phase: 'signedOut', userId: '', collage: DEFAULT_COLLAGE, notes: {}, todos: {}, highlights: {}, layout: NO_LAYOUT(), wf: {}, unlocked: false, selId: null }); },
     set: p => set(p),
     setMap: p => set({ map: { ...get().map, ...p } }),
     go: view => set({ view, selId: null, query: '', sendFor: null, map: { ...get().map, placed: null } }),
@@ -241,10 +267,11 @@ export const useStore = create<State>()((set, get) => {
       const st = get(); const note = st.notes[id]; if (!note) return;
       const { [id]: _, ...notes } = st.notes; const todos = Object.fromEntries(Object.entries(st.todos).filter(([, t]) => t.note_id !== id));
       const layout = NO_LAYOUT(); (Object.keys(layout) as LayoutKind[]).forEach(k => { const { [id]: __, ...rest } = st.layout[k]; layout[k] = rest; });
-      set({ notes, todos, layout, selId: st.selId === id ? null : st.selId, toast: st.toast?.id === id ? null : st.toast, map: { ...st.map, placed: st.map.placed === id ? null : st.map.placed, hover: null } });
-      await db().notes.delete(id); await db().todos.where('note_id').equals(id).delete(); await db().layouts.where('note_id').equals(id).delete();
+      const highlights = Object.fromEntries(Object.entries(st.highlights).filter(([, h]) => h.note_id !== id));
+      set({ notes, todos, highlights, layout, selId: st.selId === id ? null : st.selId, toast: st.toast?.id === id ? null : st.toast, map: { ...st.map, placed: st.map.placed === id ? null : st.map.placed, hover: null } });
+      await db().notes.delete(id); await db().todos.where('note_id').equals(id).delete(); await db().highlights.where('note_id').equals(id).delete(); await db().layouts.where('note_id').equals(id).delete();
       if (note.image_path) await db().images.delete(note.image_path);
-      await persist([{ kind: 'delete', table: 'sift_notes', match: { id } }]); // todos, links and layout cascade
+      await persist([{ kind: 'delete', table: 'sift_notes', match: { id } }]); // todos, highlights, links and layout cascade
       const prefix = `sift:${id}#`;
       for (const e of Object.values(st.wf)) if (isItem(e) && e.payload.subtasks.some(s => (s.src || '').startsWith(prefix))) await get().mutateWf(e.item_key, { type: 'remove_src', prefix });
     },
@@ -254,6 +281,7 @@ export const useStore = create<State>()((set, get) => {
       const next: Note = { ...n, ...patch, updated_at: nowIso() };
       if (patch.topic === 'career') next.vault = true;
       set({ notes: { ...get().notes, [id]: next } }); await db().notes.put(next); await persist([upsertOp('sift_notes', next)]);
+      if (patch.body !== undefined && patch.body !== n.body) await reanchor(new Set([id]));
     },
 
     async toggleTodo(id) {
@@ -315,6 +343,27 @@ export const useStore = create<State>()((set, get) => {
       clearTimeout(collageTimer); collageTimer = undefined;
       set({ collage: { ...get().collage, seed: get().collage.seed + 1 } });
       await get().resetLayout('collage'); await get().setSettings({ collage: get().collage });
+    },
+
+    async addHighlight(noteId, s, e, color) {
+      const n = get().notes[noteId]; if (!n) return;
+      while (s < e && /\s/.test(n.body[s])) s++; while (e > s && /\s/.test(n.body[e - 1])) e--; if (e <= s) return;
+      const mine = Object.values(get().highlights).filter(h => h.note_id === noteId);
+      const placed = anchorAll(n.body, mine), over = placed.filter(a => a.s < e && s < a.e), now = nowIso();
+      const inside = over.find(a => a.s <= s && e <= a.e);
+      let row: Highlight, drop: string[] = [];
+      if (inside) row = { ...get().highlights[inside.id], start: inside.s, color, updated_at: now };
+      else {
+        const ns = Math.min(s, ...over.map(a => a.s)), ne = Math.max(e, ...over.map(a => a.e)); drop = over.map(a => a.id);
+        row = { id: uid(), user_id: get().userId, note_id: noteId, quote: n.body.slice(ns, ne), start: ns, color, created_at: now, updated_at: now };
+      }
+      const next = { ...get().highlights, [row.id]: row }; drop.forEach(id => { delete next[id]; }); set({ highlights: next });
+      await db().highlights.put(row); await db().highlights.bulkDelete(drop);
+      await persist([...drop.map((id): QueueOp => ({ kind: 'delete', table: 'sift_highlights', match: { id } })), upsertOp('sift_highlights', row)]);
+    },
+    async removeHighlight(id) {
+      if (!get().highlights[id]) return; const { [id]: _, ...rest } = get().highlights; set({ highlights: rest });
+      await db().highlights.delete(id); await persist([{ kind: 'delete', table: 'sift_highlights', match: { id } }]);
     },
 
     async refreshLinks() { if (supabase && navigator.onLine) { await flush(); await supabase.rpc('sift_refresh_links'); } },

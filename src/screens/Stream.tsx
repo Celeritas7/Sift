@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../state/store';
-import { useAmbientPool, useConflicts, useIsMobile, useNotes, usePalette, type NoteV } from '../state/derived';
+import { useAmbientPool, useConflicts, useIsMobile, useNotes, useOwnHighlights, usePalette, type NoteV } from '../state/derived';
 import { useWeeks, useWfStats } from '../state/counts';
 import { MONO, NO_AI, SERIF, TOPICS } from '../lib/config';
 import { ago, DOW, fmtShort, MONTHS, plural } from '../lib/format';
 import { focusComposer } from '../state/focus';
 import { Chip, Eyebrow, inkBtn } from '../components/ui';
+import { segStyle } from '../components/CollageText';
+import type { Anchored } from '../lib/highlights';
 
 export function NoteChips({ n, conflict }: { n: NoteV; conflict?: boolean }) {
   const unlocked = useStore(s => s.unlocked);
@@ -72,7 +74,18 @@ function Hero() {
   </section>;
 }
 
-export function NoteRow({ n, conflict }: { n: NoteV; conflict: boolean }) {
+/** The user's own highlights on a Stream card: up to two quotes in their marker colour. */
+function OwnQuotes({ body, own }: { body: string; own: Anchored[] }) {
+  const { dark } = usePalette();
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: '68ch' }}>
+    {own.slice(0, 2).map(h => { const q = body.slice(h.s, h.e).replace(/\s+/g, ' ').trim();
+      return <p key={h.id} style={{ margin: 0, fontFamily: SERIF, fontSize: 15, lineHeight: 1.55 }}>
+        <span style={segStyle({ t: q, kind: 'own', color: h.color }, 'marker', dark)}>{q.length > 140 ? q.slice(0, 140) + '…' : q}</span></p>; })}
+    {own.length > 2 && <span style={{ fontSize: 12, color: 'var(--mu)' }}>+{plural(own.length - 2, 'more highlight')}</span>}
+  </div>;
+}
+
+export function NoteRow({ n, conflict, own = [] }: { n: NoteV; conflict: boolean; own?: Anchored[] }) {
   const st = useStore(); const mobile = useIsMobile(); const d = new Date(n.ts); const wc = n.body.trim().split(/\s+/).filter(Boolean).length;
   return <article onClick={() => st.openNote(n.id)} className="h-sf" style={{ display: 'grid', gridTemplateColumns: mobile ? '40px minmax(0,1fr)' : '56px minmax(0,1fr) 80px', gap: mobile ? 12 : 20, padding: '18px 14px', margin: '0 -14px', borderTop: '1px solid var(--ln)', borderRadius: 12, cursor: 'pointer', transition: 'background .15s' }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: MONO, fontSize: 11, color: 'var(--mu)', lineHeight: 1.4 }}>
@@ -84,6 +97,7 @@ export function NoteRow({ n, conflict }: { n: NoteV; conflict: boolean }) {
         <NoteChips n={n} conflict={conflict} />
       </div>
       <p style={{ margin: 0, color: 'var(--mu)', fontSize: 14, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', maxWidth: '68ch' }}>{n.hidden ? 'In your vault. Enter your PIN to read it.' : n.sum}</p>
+      {!n.hidden && own.length > 0 && <OwnQuotes body={n.body} own={own} />}
       {!n.hidden && n.todoList.length > 0 && <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--ac)' }}>
         <span style={{ width: 10, height: 10, border: '1.5px solid var(--ac)', borderRadius: 3, display: 'inline-block' }} />{plural(n.todoList.length, 'to-do')}</div>}
     </div>
@@ -94,7 +108,7 @@ export function NoteRow({ n, conflict }: { n: NoteV; conflict: boolean }) {
 }
 
 export function Stream() {
-  const st = useStore(); const mobile = useIsMobile(); const { all, active } = useNotes(); const conflicts = useConflicts();
+  const st = useStore(); const mobile = useIsMobile(); const { all, active } = useNotes(); const conflicts = useConflicts(); const ownBy = useOwnHighlights();
   const conflictIds = useMemo(() => new Set(conflicts.flatMap(p => [p.a, p.b])), [conflicts]);
   const isCmd = st.query.startsWith('/'), q = isCmd ? '' : st.query.trim().toLowerCase();
   const visible = active.filter(n => (n.hidden ? !q : !q || (n.title + ' ' + n.body + ' ' + n.sum).toLowerCase().includes(q)) && (st.filter === 'all' || n.topic === st.filter || n.labels.includes(st.filter)));
@@ -124,7 +138,7 @@ export function Stream() {
         <span style={{ fontFamily: SERIF, fontSize: mobile ? 32 : 52, fontWeight: 300, lineHeight: .95, letterSpacing: '-.03em' }}>{m.label}</span>
         <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--mu)' }}>{m.year} · {plural(m.rows.length, 'note')}</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>{m.rows.map(n => <NoteRow key={n.id} n={n} conflict={conflictIds.has(n.id)} />)}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>{m.rows.map(n => <NoteRow key={n.id} n={n} conflict={conflictIds.has(n.id)} own={ownBy[n.id]} />)}</div>
     </section>)}
     {!visible.length && <p style={{ margin: 0, fontFamily: SERIF, fontSize: 24, fontWeight: 300, fontStyle: 'italic', color: 'var(--mu)' }}>Nothing here. Clear the search or filter.</p>}
   </>;

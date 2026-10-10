@@ -31,8 +31,10 @@ export interface Settings { user_id: string; monday_digest: boolean; idle_second
 export interface CollageMark { t: string; ci: number; }
 export interface CollageSettings {
   pad: string; marks: CollageMark[]; muted: number[]; noteBg: 'paper' | 'white' | 'kraft' | 'fog' | 'ink'; tilt: boolean;
-  concept: 'sticky' | 'marker'; view: 'board' | 'scatter'; filter: 'hide' | 'dim'; seed: number;
+  concept: 'sticky' | 'marker'; view: 'board' | 'scatter'; filter: 'hide' | 'dim' | 'own'; seed: number;
 }
+export type HighlightColor = 'yellow' | 'pink' | 'green' | 'blue';
+export interface Highlight { id: string; user_id: string; note_id: string; quote: string; start: number; color: HighlightColor; created_at: string; updated_at: string; }
 export interface ConflictDismissal { user_id: string; a: string; b: string; }
 export interface ImportFile { user_id: string; file_name: string; content_hash: string; note_id: string | null; imported_at: string; }
 export type LayoutKind = 'map' | 'collage';

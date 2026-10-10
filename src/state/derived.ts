@@ -4,6 +4,7 @@ import { TrigramIndex, SIM_DUPLICATE } from '../similarity';
 import { DARK, LIGHT } from '../lib/config';
 import { excerpt } from '../lib/parse';
 import type { Note, Todo, Topic } from '../types';
+import { anchorAll, type Anchored } from '../lib/highlights';
 
 export interface NoteV extends Note { ts: number; hidden: boolean; todoList: Todo[]; sum: string; }
 
@@ -22,6 +23,18 @@ export function useNotes() {
     const active = all.filter(n => !n.archived), open = active.filter(n => !n.hidden);
     return { all, active, open, lockedCount: active.filter(n => n.hidden).length, byId: Object.fromEntries(all.map(n => [n.id, n])) as Record<string, NoteV> };
   }, [notes, todos, unlocked]);
+}
+
+/** The user's highlights per note, re-anchored on the note's current text (quotes that no longer exist are left out). */
+export function useOwnHighlights() {
+  const highlights = useStore(s => s.highlights), notes = useStore(s => s.notes);
+  return useMemo(() => {
+    const byNote: Record<string, typeof highlights[string][]> = {};
+    Object.values(highlights).forEach(h => { (byNote[h.note_id] ||= []).push(h); });
+    const out: Record<string, Anchored[]> = {};
+    Object.entries(byNote).forEach(([id, list]) => { const n = notes[id]; if (n) { const a = anchorAll(n.body, list); if (a.length) out[id] = a; } });
+    return out;
+  }, [highlights, notes]);
 }
 
 /** Trigram TF-IDF index over every note (rebuilt only when text changes). */

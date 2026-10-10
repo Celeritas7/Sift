@@ -108,6 +108,19 @@ create table if not exists public.sift_conflict_dismissals (
   primary key (user_id, a, b)
 );
 
+-- Manual highlights: passages the user marked in a note. Re-anchored client-side by `quote` near `start`.
+create table if not exists public.sift_highlights (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid(),
+  note_id uuid not null references public.sift_notes(id) on delete cascade,
+  quote text not null,
+  start int not null check (start >= 0),
+  color text not null default 'yellow' check (color in ('yellow', 'pink', 'green', 'blue')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists sift_highlights_note on public.sift_highlights (user_id, note_id);
+
 create table if not exists public.note_embeddings (
   note_id uuid primary key references public.sift_notes(id) on delete cascade,
   user_id uuid not null,
@@ -126,8 +139,9 @@ alter table public.sift_digests enable row level security;
 alter table public.sift_settings enable row level security;
 alter table public.note_embeddings enable row level security;
 alter table public.sift_conflict_dismissals enable row level security;
+alter table public.sift_highlights enable row level security;
 do $$ declare t text; begin
-  foreach t in array array['sift_notes','sift_todos','sift_note_links','sift_note_layout','sift_import_files','sift_digests','sift_settings','note_embeddings','sift_conflict_dismissals'] loop
+  foreach t in array array['sift_notes','sift_todos','sift_note_links','sift_note_layout','sift_import_files','sift_digests','sift_settings','note_embeddings','sift_conflict_dismissals','sift_highlights'] loop
     execute format('drop policy if exists %I_owner on public.%I', t, t);
     execute format('create policy %I_owner on public.%I for all using (user_id = auth.uid() or public.sift_is_admin()) with check (user_id = auth.uid())', t, t);
   end loop; end $$;
@@ -136,6 +150,7 @@ do $$ declare t text; begin
 create or replace function public.sift_touch() returns trigger language plpgsql as $$ begin new.updated_at = now(); return new; end $$;
 drop trigger if exists sift_notes_touch on public.sift_notes; create trigger sift_notes_touch before update on public.sift_notes for each row execute function public.sift_touch();
 drop trigger if exists sift_todos_touch on public.sift_todos; create trigger sift_todos_touch before update on public.sift_todos for each row execute function public.sift_touch();
+drop trigger if exists sift_highlights_touch on public.sift_highlights; create trigger sift_highlights_touch before update on public.sift_highlights for each row execute function public.sift_touch();
 
 -- Relevance (pg_trgm). Returns neighbours above threshold for one note.
 create or replace function public.sift_similar_notes(p_note uuid, p_min real default 0.15, p_limit int default 10)

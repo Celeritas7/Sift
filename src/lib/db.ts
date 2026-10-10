@@ -1,6 +1,6 @@
 // IndexedDB cache (Dexie). One database per user so a shared device never mixes accounts.
 import Dexie, { type Table } from 'dexie';
-import type { ConflictDismissal, Digest, ImportFile, LayoutRow, Note, Settings, Todo, WfEntry, WfMutation } from '../types';
+import type { ConflictDismissal, Digest, Highlight, ImportFile, LayoutRow, Note, Settings, Todo, WfEntry, WfMutation } from '../types';
 
 export type QueueOp =
   | { seq?: number; kind: 'upsert'; table: SyncTable; row: Record<string, unknown> }
@@ -8,10 +8,10 @@ export type QueueOp =
   | { seq?: number; kind: 'wf'; item_key: string; mut: WfMutation }
   | { seq?: number; kind: 'upload'; path: string; dataUrl: string };
 
-export type SyncTable = 'sift_notes' | 'sift_todos' | 'sift_note_layout' | 'sift_import_files' | 'sift_digests' | 'sift_settings' | 'sift_conflict_dismissals';
+export type SyncTable = 'sift_notes' | 'sift_todos' | 'sift_note_layout' | 'sift_import_files' | 'sift_digests' | 'sift_settings' | 'sift_conflict_dismissals' | 'sift_highlights';
 export const CONFLICT_KEYS: Record<SyncTable, string> = {
   sift_notes: 'id', sift_todos: 'id', sift_note_layout: 'user_id,note_id,layout', sift_import_files: 'user_id,file_name,content_hash',
-  sift_digests: 'user_id,week_of', sift_settings: 'user_id', sift_conflict_dismissals: 'user_id,a,b',
+  sift_digests: 'user_id,week_of', sift_settings: 'user_id', sift_conflict_dismissals: 'user_id,a,b', sift_highlights: 'id',
 };
 
 export interface Meta { key: string; value: unknown; }
@@ -20,6 +20,7 @@ export class SiftDB extends Dexie {
   notes!: Table<Note, string>;
   todos!: Table<Todo, string>;
   layouts!: Table<LayoutRow, [LayoutRow['layout'], string]>;
+  highlights!: Table<Highlight, string>;
   wf!: Table<WfEntry, string>;
   digests!: Table<Digest, string>;
   dismissals!: Table<ConflictDismissal, [string, string]>;
@@ -39,6 +40,7 @@ export class SiftDB extends Dexie {
       await tx.table('layouts').bulkPut(old.map(r => ({ ...r, layout: 'map', seed: 0 })));
     });
     this.version(3).stores({ layout: null });
+    this.version(4).stores({ highlights: 'id, note_id' });
   }
 }
 

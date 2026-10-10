@@ -1,5 +1,6 @@
 // Collage mode: client-side matching of the user's writing against notes (no AI), plus the card looks.
-import type { CollageMark, CollageSettings, Note, Topic } from '../types';
+import type { CollageMark, CollageSettings, HighlightColor, Note, Topic } from '../types';
+import type { Anchored } from './highlights';
 import type { Palette } from './config';
 
 export const DEFAULT_COLLAGE: CollageSettings = { pad: '', marks: [], muted: [], noteBg: 'paper', tilt: true, concept: 'sticky', view: 'board', filter: 'hide', seed: 0 };
@@ -132,21 +133,31 @@ export function hitLine(m: NoteMatch, marks: CollageMark[]) {
 }
 
 // ---------- highlight segments ----------
-export type Seg = { t: string; kind: 'plain' } | { t: string; kind: 'hl'; pi: number } | { t: string; kind: 'mark'; ci: number };
-/** Split `text` at every sentence-highlight and mark boundary; marks win over sentences. Sentence whitespace is not highlighted. */
-export function segments(text: string, sents: Pick<Sentence, 's' | 'e' | 'raw' | 'pi'>[], mrs: MarkHit[], marks: CollageMark[]): Seg[] {
+export type Seg = { t: string; kind: 'plain' } | { t: string; kind: 'hl'; pi: number } | { t: string; kind: 'mark'; ci: number } | { t: string; kind: 'own'; color: HighlightColor };
+/** Split `text` at every boundary. Priority: marks > the user's own highlights > automatic sentence matches. Sentence whitespace is not highlighted. */
+export function segments(text: string, sents: Pick<Sentence, 's' | 'e' | 'raw' | 'pi'>[], mrs: MarkHit[], marks: CollageMark[], own: Anchored[] = []): Seg[] {
   const hs: { s: number; e: number; pi: number }[] = [];
   sents.forEach(se => {
     if (se.pi == null) return;
     const lead = se.raw.length - se.raw.trimStart().length, trail = se.raw.length - se.raw.trimEnd().length;
     if (se.e - trail > se.s + lead) hs.push({ s: se.s + lead, e: se.e - trail, pi: se.pi });
   });
-  const pts = new Set([0, text.length]); hs.forEach(h => { pts.add(h.s); pts.add(h.e); }); mrs.forEach(m => { pts.add(m.s); pts.add(m.e); });
+  const pts = new Set([0, text.length]); [...hs, ...mrs, ...own].forEach(h => { pts.add(h.s); pts.add(h.e); });
   const P = [...pts].filter(x => x >= 0 && x <= text.length).sort((a, b) => a - b), out: Seg[] = [];
   for (let k = 0; k < P.length - 1; k++) {
     const a = P[k], b = P[k + 1]; if (b <= a) continue; const t = text.slice(a, b);
-    const m = mrs.find(x => x.s <= a && a < x.e), h = hs.find(x => x.s <= a && a < x.e);
-    if (m) out.push({ t, kind: 'mark', ci: marks[m.mi]?.ci ?? 0 }); else if (h) out.push({ t, kind: 'hl', pi: h.pi }); else out.push({ t, kind: 'plain' });
+    const m = mrs.find(x => x.s <= a && a < x.e), o = own.find(x => x.s <= a && a < x.e), h = hs.find(x => x.s <= a && a < x.e);
+    if (m) out.push({ t, kind: 'mark', ci: marks[m.mi]?.ci ?? 0 }); else if (o) out.push({ t, kind: 'own', color: o.color });
+    else if (h) out.push({ t, kind: 'hl', pi: h.pi }); else out.push({ t, kind: 'plain' });
   }
+  return out;
+}
+
+/** The part of `segs` (a partition of some text) covering [s, e), with outer whitespace trimmed. */
+export function cutSegs(segs: Seg[], s: number, e: number): Seg[] {
+  const out: Seg[] = []; let at = 0;
+  for (const g of segs) { const a = Math.max(s, at), b = Math.min(e, at + g.t.length); if (b > a) out.push({ ...g, t: g.t.slice(a - at, b - at) }); at += g.t.length; }
+  while (out.length && !out[0].t.trim()) out.shift(); while (out.length && !out[out.length - 1].t.trim()) out.pop();
+  if (out.length) { out[0] = { ...out[0], t: out[0].t.trimStart() }; const l = out.length - 1; out[l] = { ...out[l], t: out[l].t.trimEnd() }; }
   return out;
 }

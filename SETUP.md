@@ -10,7 +10,7 @@
    drop trigger if exists link_role_on_login on auth.users; create trigger link_role_on_login after insert on auth.users for each row execute function public.link_role_on_login();
    ```
 4. Storage: bucket `keep-attachments` is created by the SQL (private, per-user folders).
-5. Realtime: enable for `sift_notes`, `sift_todos`, `weekly_focus_entries`.
+5. Realtime: enable for `sift_notes`, `sift_todos`, `sift_highlights`, `weekly_focus_entries`.
 
 ## 2. App
 ```bash
