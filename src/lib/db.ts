@@ -10,7 +10,7 @@ export type QueueOp =
 
 export type SyncTable = 'sift_notes' | 'sift_todos' | 'sift_note_layout' | 'sift_import_files' | 'sift_digests' | 'sift_settings' | 'sift_conflict_dismissals';
 export const CONFLICT_KEYS: Record<SyncTable, string> = {
-  sift_notes: 'id', sift_todos: 'id', sift_note_layout: 'user_id,note_id', sift_import_files: 'user_id,file_name,content_hash',
+  sift_notes: 'id', sift_todos: 'id', sift_note_layout: 'user_id,note_id,layout', sift_import_files: 'user_id,file_name,content_hash',
   sift_digests: 'user_id,week_of', sift_settings: 'user_id', sift_conflict_dismissals: 'user_id,a,b',
 };
 
@@ -19,7 +19,7 @@ export interface Meta { key: string; value: unknown; }
 export class SiftDB extends Dexie {
   notes!: Table<Note, string>;
   todos!: Table<Todo, string>;
-  layout!: Table<LayoutRow, string>;
+  layouts!: Table<LayoutRow, [LayoutRow['layout'], string]>;
   wf!: Table<WfEntry, string>;
   digests!: Table<Digest, string>;
   dismissals!: Table<ConflictDismissal, [string, string]>;
@@ -33,6 +33,12 @@ export class SiftDB extends Dexie {
       notes: 'id, created_at, updated_at', todos: 'id, note_id', layout: 'note_id', wf: 'item_key', digests: 'week_of',
       dismissals: '[a+b]', importFiles: '[file_name+content_hash], content_hash', images: 'path', queue: '++seq', meta: 'key',
     });
+    // v2: positions are kept per layout (Map, Collage). Dexie cannot change a primary key, so copy into a new table.
+    this.version(2).stores({ layouts: '[layout+note_id], note_id, layout' }).upgrade(async tx => {
+      const old = await tx.table('layout').toArray() as Omit<LayoutRow, 'layout' | 'seed'>[];
+      await tx.table('layouts').bulkPut(old.map(r => ({ ...r, layout: 'map', seed: 0 })));
+    });
+    this.version(3).stores({ layout: null });
   }
 }
 

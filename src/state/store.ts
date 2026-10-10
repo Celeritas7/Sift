@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConflictDismissal, Digest, ImportFile, LayoutRow, Note, Profile, Settings, Todo, Topic, WfEntry, WfItemPayload, WfMutation } from '../types';
+import type { CollageSettings, ConflictDismissal, Digest, ImportFile, LayoutKind, LayoutRow, Note, Profile, Settings, Todo, Topic, WfEntry, WfItemPayload, WfMutation } from '../types';
 import { db, getMeta, openDb, setMeta, type QueueOp, type SyncTable } from '../lib/db';
 import { cloud, LOCAL_USER, supabase } from '../lib/supabase';
 import { enqueue, fetchAll, fetchWf, flush, pendingCount, setSyncHandlers, subscribe, wireBackgroundFlush } from '../lib/sync';
@@ -7,9 +7,10 @@ import { applyWfMutation, isItem, newSubtask } from '../lib/wf';
 import { nowIso, uid } from '../lib/format';
 import { sha256 } from '../keepImport';
 import { WF_BOARD } from '../lib/config';
+import { DEFAULT_COLLAGE } from '../lib/collage';
 import wfSample from '../../supabase/weekly_focus_sample.json';
 
-export type View = 'stream' | 'week' | 'map' | 'lens' | 'todos' | 'conflicts' | 'archive';
+export type View = 'stream' | 'week' | 'map' | 'collage' | 'lens' | 'todos' | 'conflicts' | 'archive';
 export interface NewNote {
   id?: string; title: string; body: string; topic: Topic; labels?: string[]; ctx?: string[]; pinned?: boolean; vault?: boolean; archived?: boolean;
   todos?: { text: string; done: boolean }[]; source?: Note['source']; source_file?: string | null; content_hash?: string | null; color?: string | null;
@@ -23,13 +24,24 @@ const pairKey = (a: string, b: string) => (a < b ? a + '|' + b : b + '|' + a);
 const byId = <T,>(rows: T[], k: (r: T) => string) => Object.fromEntries(rows.map(r => [k(r), r])) as Record<string, T>;
 const newer = (remote: { updated_at?: string }, local?: { updated_at?: string }) => !local || Date.parse(remote.updated_at || '') >= Date.parse(local.updated_at || '');
 const LOCAL_SALT = 'sift-local-vault:';
+export type Positions = Record<string, { x: number; y: number }>;
+const NO_LAYOUT = (): Record<LayoutKind, Positions> => ({ map: {}, collage: {} });
+/** Saved positions by layout. Collage keeps only the current shuffle's rows. */
+const groupLayout = (rows: LayoutRow[], seed: number) => {
+  const out = NO_LAYOUT();
+  rows.forEach(r => { const k = r.layout ?? 'map'; if (k === 'collage' && (r.seed ?? 0) !== seed) return; out[k][r.note_id] = { x: r.x, y: r.y }; });
+  return out;
+};
+const collageSeed = (s: Settings | null | undefined) => s?.collage?.seed ?? 0;
+const collageOf = (s: Settings | null | undefined): CollageSettings => ({ ...DEFAULT_COLLAGE, ...(s?.collage ?? {}) });
+let collageTimer: ReturnType<typeof setTimeout> | undefined;
 
 interface State {
   phase: 'boot' | 'signedOut' | 'ready'; userId: string; profile: Profile | null;
-  notes: Record<string, Note>; todos: Record<string, Todo>; layout: Record<string, { x: number; y: number }>;
+  notes: Record<string, Note>; todos: Record<string, Todo>; layout: Record<LayoutKind, Positions>;
   wf: Record<string, WfEntry>; wfSyncedAt: number; dismissed: Record<string, true>; digests: Record<string, Digest>; settings: Settings;
   pending: number; error: string | null; hasPin: boolean; pinIsDemo: boolean;
-  view: View; filter: string; query: string; selId: string | null; unlocked: boolean;
+  view: View; filter: string; query: string; selId: string | null; unlocked: boolean; collage: CollageSettings;
   pin: { open: boolean; mode: 'enter' | 'set'; after: string | null }; toast: Toast | null; importOpen: boolean;
   ambient: boolean; opened: Record<string, true>; sessionNew: Record<string, true>; composerFocused: boolean; sendFor: string | null; sendItem: string | null; map: MapUi; week: string | null;
 
@@ -51,10 +63,15 @@ interface State {
   sendTodo(todoId: string, itemKey: string): Promise<void>;
   toggleWfSubtask(itemKey: string, subId: string): Promise<void>;
   mutateWf(itemKey: string, mut: WfMutation): Promise<void>;
-  setLayout(noteId: string, x: number, y: number): Promise<void>;
-  resetLayout(): Promise<void>;
+  setLayout(kind: LayoutKind, noteId: string, x: number, y: number): Promise<void>;
+  /** Forget every saved position of one layout (the other layout is untouched). */
+  resetLayout(kind: LayoutKind): Promise<void>;
   dismissPair(a: string, b: string, on: boolean): Promise<void>;
   setSettings(p: Partial<Settings>): Promise<void>;
+  /** Update Collage state now; saved to sift_settings.collage 600 ms after the last change. */
+  setCollage(p: Partial<CollageSettings>): void;
+  /** New scatter seed: forgets the old shuffle's positions and saves the seed right away. */
+  shuffleCollage(): Promise<void>;
   refreshLinks(): Promise<void>;
 }
 
@@ -112,16 +129,20 @@ export const useStore = create<State>()((set, get) => {
       };
       const st = get();
       const n = mergeRows(st.notes, notes), t = mergeRows(st.todos, todos);
-      const lay = { ...Object.fromEntries(layout.map(l => [l.note_id, { x: l.x, y: l.y }])), ...Object.fromEntries(Object.entries(st.layout).filter(([k]) => pendingIds.has(k))) };
-      await db().transaction('rw', [db().notes, db().todos, db().layout, db().digests, db().dismissals, db().importFiles], async () => {
+      const seed = collageSeed(settings[0] ? { ...st.settings, ...settings[0] } : st.settings);
+      const lay = groupLayout(layout, seed);
+      (Object.keys(lay) as LayoutKind[]).forEach(k => Object.entries(st.layout[k]).forEach(([id, p]) => { if (pendingIds.has(id)) lay[k][id] = p; }));
+      const layRows = (Object.keys(lay) as LayoutKind[]).flatMap(k => Object.entries(lay[k]).map(([note_id, p]): LayoutRow => ({ user_id: user, note_id, layout: k, seed: k === 'collage' ? seed : 0, ...p })));
+      await db().transaction('rw', [db().notes, db().todos, db().layouts, db().digests, db().dismissals, db().importFiles], async () => {
         await db().notes.clear(); await db().notes.bulkPut(Object.values(n));
         await db().todos.clear(); await db().todos.bulkPut(Object.values(t));
-        await db().layout.clear(); await db().layout.bulkPut(Object.entries(lay).map(([note_id, p]) => ({ user_id: user, note_id, ...p })));
+        await db().layouts.clear(); await db().layouts.bulkPut(layRows);
         await db().digests.bulkPut(digests); await db().dismissals.bulkPut(dismissals); await db().importFiles.bulkPut(files);
       });
       set({ notes: n, todos: t, layout: lay, digests: { ...st.digests, ...byId(digests, d => d.week_of) },
         dismissed: { ...st.dismissed, ...Object.fromEntries(dismissals.map(d => [pairKey(d.a, d.b), true as const])) },
-        settings: settings[0] ? { ...st.settings, ...settings[0] } : st.settings });
+        settings: settings[0] ? { ...st.settings, ...settings[0] } : st.settings,
+        ...(settings[0]?.collage && !collageTimer ? { collage: collageOf(settings[0]) } : {}) });
       if (!settings[0]) await persist([upsertOp('sift_settings', st.settings)]);
       const wf = await fetchWf(); for (const e of wf) await applyWfEntry(e);
       const has = await supabase.rpc('sift_has_pin'); if (!has.error) set({ hasPin: !!has.data });
@@ -130,15 +151,15 @@ export const useStore = create<State>()((set, get) => {
 
   return {
     phase: 'boot', userId: '', profile: null,
-    notes: {}, todos: {}, layout: {}, wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
+    notes: {}, todos: {}, layout: NO_LAYOUT(), wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
     pending: 0, error: null, hasPin: true, pinIsDemo: false,
-    view: 'stream', filter: 'all', query: '', selId: null, unlocked: false, pin: { open: false, mode: 'enter', after: null }, toast: null, importOpen: false,
+    view: 'stream', filter: 'all', query: '', selId: null, unlocked: false, collage: DEFAULT_COLLAGE, pin: { open: false, mode: 'enter', after: null }, toast: null, importOpen: false,
     ambient: false, opened: {}, sessionNew: {}, composerFocused: false, sendFor: null, sendItem: null, week: null, map: { zoom: 1, pan: { x: 0, y: 0 }, topic: null, hover: null, placed: null, dragging: null },
 
     async init(user, profile = null) {
       const d = openDb(user);
       const [notes, todos, layout, wf, digests, dismissals, settings] = await Promise.all([
-        d.notes.toArray(), d.todos.toArray(), d.layout.toArray(), d.wf.toArray(), d.digests.toArray(), d.dismissals.toArray(), getMeta<Settings | null>('settings', null)]);
+        d.notes.toArray(), d.todos.toArray(), d.layouts.toArray(), d.wf.toArray(), d.digests.toArray(), d.dismissals.toArray(), getMeta<Settings | null>('settings', null)]);
       let opened: Record<string, true> = {}; try { opened = JSON.parse(localStorage.getItem('sift-opened-' + user) || '{}'); } catch { /* fresh */ }
       let wfRows = wf;
       if (!cloud && !wfRows.length) { wfRows = (wfSample.rows as { item_key: string; payload: unknown }[]).map(r => ({ board_id: WF_BOARD, item_key: r.item_key, payload: r.payload } as WfEntry)); await d.wf.bulkPut(wfRows); }
@@ -147,9 +168,9 @@ export const useStore = create<State>()((set, get) => {
       if (!cloud) pinIsDemo = await getMeta('pinIsDemo', false);
       set({
         phase: 'ready', userId: user, profile, notes: byId(notes, n => n.id), todos: byId(todos, t => t.id),
-        layout: Object.fromEntries(layout.map(l => [l.note_id, { x: l.x, y: l.y }])), wf: byId(wfRows, e => e.item_key),
+        layout: groupLayout(layout, collageSeed(settings)), wf: byId(wfRows, e => e.item_key),
         digests: byId(digests, x => x.week_of), dismissed: Object.fromEntries(dismissals.map(x => [pairKey(x.a, x.b), true as const])),
-        settings: settings ?? DEFAULT_SETTINGS(user), opened, pinIsDemo, unlocked: sessionStorage.getItem('sift-unlocked') === user,
+        settings: settings ?? DEFAULT_SETTINGS(user), collage: collageOf(settings), opened, pinIsDemo, unlocked: sessionStorage.getItem('sift-unlocked') === user,
       });
       if (!cloud) return;
       setSyncHandlers({
@@ -161,7 +182,7 @@ export const useStore = create<State>()((set, get) => {
       wireBackgroundFlush(); subscribe(user); await flush(); await pull(user);
       set({ pending: await pendingCount() });
     },
-    setSignedOut: () => set({ phase: 'signedOut', userId: '', notes: {}, todos: {}, layout: {}, wf: {}, unlocked: false, selId: null }),
+    setSignedOut: () => { clearTimeout(collageTimer); collageTimer = undefined; set({ phase: 'signedOut', userId: '', collage: DEFAULT_COLLAGE, notes: {}, todos: {}, layout: NO_LAYOUT(), wf: {}, unlocked: false, selId: null }); },
     set: p => set(p),
     setMap: p => set({ map: { ...get().map, ...p } }),
     go: view => set({ view, selId: null, query: '', sendFor: null, map: { ...get().map, placed: null } }),
@@ -219,9 +240,9 @@ export const useStore = create<State>()((set, get) => {
     async removeNote(id) {
       const st = get(); const note = st.notes[id]; if (!note) return;
       const { [id]: _, ...notes } = st.notes; const todos = Object.fromEntries(Object.entries(st.todos).filter(([, t]) => t.note_id !== id));
-      const { [id]: __, ...layout } = st.layout;
+      const layout = NO_LAYOUT(); (Object.keys(layout) as LayoutKind[]).forEach(k => { const { [id]: __, ...rest } = st.layout[k]; layout[k] = rest; });
       set({ notes, todos, layout, selId: st.selId === id ? null : st.selId, toast: st.toast?.id === id ? null : st.toast, map: { ...st.map, placed: st.map.placed === id ? null : st.map.placed, hover: null } });
-      await db().notes.delete(id); await db().todos.where('note_id').equals(id).delete(); await db().layout.delete(id);
+      await db().notes.delete(id); await db().todos.where('note_id').equals(id).delete(); await db().layouts.where('note_id').equals(id).delete();
       if (note.image_path) await db().images.delete(note.image_path);
       await persist([{ kind: 'delete', table: 'sift_notes', match: { id } }]); // todos, links and layout cascade
       const prefix = `sift:${id}#`;
@@ -262,13 +283,15 @@ export const useStore = create<State>()((set, get) => {
       await persist([{ kind: 'wf', item_key: itemKey, mut }]);
     },
 
-    async setLayout(noteId, x, y) {
-      set({ layout: { ...get().layout, [noteId]: { x, y } } });
-      const row: LayoutRow = { user_id: get().userId, note_id: noteId, x, y }; await db().layout.put(row); await persist([upsertOp('sift_note_layout', row)]);
+    async setLayout(kind, noteId, x, y) {
+      const lay = get().layout; set({ layout: { ...lay, [kind]: { ...lay[kind], [noteId]: { x, y } } } });
+      const row: LayoutRow = { user_id: get().userId, note_id: noteId, layout: kind, seed: kind === 'collage' ? get().collage.seed : 0, x, y };
+      await db().layouts.put(row); await persist([upsertOp('sift_note_layout', row)]);
     },
-    async resetLayout() {
-      const ids = Object.keys(get().layout); set({ layout: {}, map: { ...get().map, zoom: 1, pan: { x: 0, y: 0 } } }); await db().layout.clear();
-      await persist(ids.map(id => ({ kind: 'delete', table: 'sift_note_layout', match: { user_id: get().userId, note_id: id } })));
+    async resetLayout(kind) {
+      set({ layout: { ...get().layout, [kind]: {} }, ...(kind === 'map' ? { map: { ...get().map, zoom: 1, pan: { x: 0, y: 0 } } } : {}) });
+      await db().layouts.where('layout').equals(kind).delete();
+      await persist([{ kind: 'delete', table: 'sift_note_layout', match: { user_id: get().userId, layout: kind } }]);
     },
 
     async dismissPair(a, b, on) {
@@ -282,6 +305,16 @@ export const useStore = create<State>()((set, get) => {
     async setSettings(p) {
       const next = { ...get().settings, ...p, user_id: get().userId, updated_at: nowIso() }; set({ settings: next });
       await setMeta('settings', next); await persist([upsertOp('sift_settings', next)]);
+    },
+
+    setCollage(p) {
+      set({ collage: { ...get().collage, ...p } }); clearTimeout(collageTimer);
+      collageTimer = setTimeout(() => { collageTimer = undefined; void get().setSettings({ collage: get().collage }); }, 600);
+    },
+    async shuffleCollage() {
+      clearTimeout(collageTimer); collageTimer = undefined;
+      set({ collage: { ...get().collage, seed: get().collage.seed + 1 } });
+      await get().resetLayout('collage'); await get().setSettings({ collage: get().collage });
     },
 
     async refreshLinks() { if (supabase && navigator.onLine) { await flush(); await supabase.rpc('sift_refresh_links'); } },

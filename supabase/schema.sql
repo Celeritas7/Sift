@@ -64,8 +64,10 @@ create table if not exists public.sift_note_links (
 create table if not exists public.sift_note_layout (
   user_id uuid not null default auth.uid(),
   note_id uuid not null references public.sift_notes(id) on delete cascade,
-  x real not null, y real not null,  -- map units: x 0..100, y 0..62.5
-  primary key (user_id, note_id)
+  layout text not null default 'map' check (layout in ('map', 'collage')),
+  seed int not null default 0,       -- collage: the scatter shuffle these positions belong to
+  x real not null, y real not null,  -- map: x 0..100, y 0..62.5 · collage: px on the scatter board
+  primary key (user_id, note_id, layout)
 );
 
 create table if not exists public.sift_import_files (
@@ -94,6 +96,7 @@ create table if not exists public.sift_settings (
   idle_seconds int not null default 60,
   ambient_seconds int not null default 20,
   theme text not null default 'light',
+  collage jsonb,                     -- Collage mode: pad text, marks, muted paragraphs, note colour, tilt
   updated_at timestamptz not null default now()
 );
 

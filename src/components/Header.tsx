@@ -7,7 +7,7 @@ import { focusComposer } from '../state/focus';
 import { cloud, signOut } from '../lib/supabase';
 
 export const NAV: { id: View; label: string; mobile?: string }[] = [
-  { id: 'stream', label: 'Stream' }, { id: 'week', label: 'Week' }, { id: 'map', label: 'Map' }, { id: 'lens', label: 'Lens' },
+  { id: 'stream', label: 'Stream' }, { id: 'week', label: 'Week' }, { id: 'map', label: 'Map' }, { id: 'collage', label: 'Collage' }, { id: 'lens', label: 'Lens' },
   { id: 'todos', label: 'To-dos' }, { id: 'conflicts', label: 'Conflicts', mobile: 'Dupes' },
 ];
 
@@ -22,6 +22,7 @@ export function useCommands() {
     { key: '/new', label: 'Write a note', run: () => { st.set({ query: '', selId: null }); focusComposer(); } },
     { key: '/week', label: 'Weekly Focus board', run: () => st.go('week') },
     { key: '/map', label: 'Relevance map', run: () => st.go('map') },
+    { key: '/collage', label: 'Collage of your writing', run: () => st.go('collage') },
     { key: '/ambient', label: 'Start ambient mode', run: () => st.set({ query: '', ambient: true }) },
     { key: '/vault', label: st.unlocked ? 'Lock the vault' : 'Unlock the vault', run: () => { st.set({ query: '' }); if (st.unlocked) st.lock(); else st.askPin(); } },
     { key: '/todos', label: 'Open to-dos', run: () => st.go('todos') },
@@ -102,7 +103,7 @@ export function Header() {
 
 export function MobileNav() {
   const st = useStore(); const { c } = usePalette(); const nav = useNavItems();
-  return <nav style={{ position: 'sticky', bottom: 0, zIndex: 30, display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 2, margin: '0 10px 12px', padding: 4, borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', boxShadow: '0 10px 30px rgba(0,0,0,.2)' }}>
+  return <nav style={{ position: 'sticky', bottom: 0, zIndex: 30, display: 'grid', gridTemplateColumns: `repeat(${nav.length},1fr)`, gap: 2, margin: '0 10px 12px', padding: 4, borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', boxShadow: '0 10px 30px rgba(0,0,0,.2)' }}>
     {nav.map(n => { const on = st.view === n.id; return <button key={n.id} onClick={() => st.go(n.id)} style={{ padding: '10px 2px', border: 0, borderRadius: 999, background: on ? c.bg : 'transparent', color: on ? c.ink : c.bg, fontSize: 11, minHeight: 44 }}>{n.mobile ?? n.label}</button>; })}
   </nav>;
 }

@@ -17,7 +17,7 @@ export function MapView() {
   // Polar seed + 60 relaxation passes (ported exactly), then user positions on top.
   const base = useMemo(() => layoutMap(notes.map(n => ({ id: n.id, topic: n.topic, ts: n.ts })), TOPICS.map(t => t.id as string)), [idsKey]);
   const pos = useMemo(() => { const p: Record<string, { x: number; y: number; flip: boolean }> = {};
-    Object.entries(base).forEach(([k, v]) => { const o = drag[k] || st.layout[k]; p[k] = o ? { ...v, x: o.x, y: o.y } : v; }); return p; }, [base, drag, st.layout]);
+    Object.entries(base).forEach(([k, v]) => { const o = drag[k] || st.layout.map[k]; p[k] = o ? { ...v, x: o.x, y: o.y } : v; }); return p; }, [base, drag, st.layout.map]);
   posRef.current = pos;
 
   const thr = (a: string, b: string) => (st.sessionNew[a] || st.sessionNew[b] ? SIM_NEW : SIM_MIN);
@@ -38,7 +38,7 @@ export function MapView() {
       last = { x: Math.min(97, Math.max(3, b.x + dx / (r.width * z) * 100)), y: Math.min(60, Math.max(2.5, b.y + dy / (r.height * z) * 62.5)) };
       st.setMap({ dragging: id }); setDrag(d => ({ ...d, [id]: last })); };
     const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); st.setMap({ dragging: null });
-      if (moved) void st.setLayout(id, last.x, last.y).then(() => setDrag(d => { const { [id]: _, ...rest } = d; return rest; })); else st.openNote(id); };
+      if (moved) void st.setLayout('map', id, last.x, last.y).then(() => setDrag(d => { const { [id]: _, ...rest } = d; return rest; })); else st.openNote(id); };
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   };
   const bgDown = (e: React.PointerEvent) => { if (e.button > 0) return; const sx = e.clientX, sy = e.clientY, b = { ...m.pan };
@@ -53,7 +53,7 @@ export function MapView() {
   const place = async (e: React.FormEvent) => { e.preventDefault(); const r = await captureNote(draft, {}, index, open); if (!r) return;
     const linked = suggestFor(index, open, r.note.body).related.length > 0; setDraft(''); st.setMap({ placed: r.note.id, hover: linked ? r.note.id : null });
     setTimeout(() => { if (useStore.getState().map.hover === r.note.id) st.setMap({ hover: null }); }, 3500); };
-  const edited = Object.keys(st.layout).length > 0 || Math.abs(m.zoom - 1) > 0.01 || m.pan.x !== 0 || m.pan.y !== 0;
+  const edited = Object.keys(st.layout.map).length > 0 || Math.abs(m.zoom - 1) > 0.01 || m.pan.x !== 0 || m.pan.y !== 0;
   const stop = (e: React.PointerEvent) => e.stopPropagation();
   const newest = [...open].filter(n => st.sessionNew[n.id]).sort((a, b) => b.ts - a.ts)[0]?.id;
 
@@ -101,7 +101,7 @@ export function MapView() {
         <button className="h-sf2" onClick={() => st.setMap({ zoom: Math.max(0.6, m.zoom / 1.2) })} aria-label="Zoom out" style={{ width: 28, height: 28, border: 0, borderRadius: '50%', background: 'transparent', fontSize: 16, lineHeight: 1 }}>−</button>
         <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--mu)', minWidth: 40, textAlign: 'center' }}>{Math.round(m.zoom * 100)}%</span>
         <button className="h-sf2" onClick={() => st.setMap({ zoom: Math.min(2.5, m.zoom * 1.2) })} aria-label="Zoom in" style={{ width: 28, height: 28, border: 0, borderRadius: '50%', background: 'transparent', fontSize: 16, lineHeight: 1 }}>+</button>
-        {edited && <button onClick={() => void st.resetLayout()} style={{ height: 28, padding: '0 10px', border: 0, borderLeft: '1px solid var(--ln)', background: 'transparent', fontSize: 12, color: 'var(--ac)' }}>Reset</button>}
+        {edited && <button onClick={() => void st.resetLayout('map')} style={{ height: 28, padding: '0 10px', border: 0, borderLeft: '1px solid var(--ln)', background: 'transparent', fontSize: 12, color: 'var(--ac)' }}>Reset</button>}
       </div>
       {m.topic && <div onPointerDown={stop} style={{ position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px 5px 12px', borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontSize: 12, cursor: 'default', animation: 'siftin .15s ease-out' }}>
         <span>Only {topicName(m.topic)}</span>

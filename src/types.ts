@@ -27,10 +27,16 @@ export const TOPIC_PREFIX: Record<string, string> = { eng: 'office:', soft: 'app
 export const modeForTopic = (t: Topic): WfMode => (t === 'eng' ? 'o' : 'p');
 
 export interface Digest { user_id: string; week_of: string; text: string | null; wf_line: string | null; generated_by: 'ai' | 'manual' | null; updated_at: string; }
-export interface Settings { user_id: string; monday_digest: boolean; idle_seconds: number; ambient_seconds: number; theme: 'light' | 'dark'; updated_at: string; }
+export interface Settings { user_id: string; monday_digest: boolean; idle_seconds: number; ambient_seconds: number; theme: 'light' | 'dark'; collage?: CollageSettings | null; updated_at: string; }
+export interface CollageMark { t: string; ci: number; }
+export interface CollageSettings {
+  pad: string; marks: CollageMark[]; muted: number[]; noteBg: 'paper' | 'white' | 'kraft' | 'fog' | 'ink'; tilt: boolean;
+  concept: 'sticky' | 'marker'; view: 'board' | 'scatter'; filter: 'hide' | 'dim'; seed: number;
+}
 export interface ConflictDismissal { user_id: string; a: string; b: string; }
 export interface ImportFile { user_id: string; file_name: string; content_hash: string; note_id: string | null; imported_at: string; }
-export interface LayoutRow { user_id: string; note_id: string; x: number; y: number; }
+export type LayoutKind = 'map' | 'collage';
+export interface LayoutRow { user_id: string; note_id: string; layout: LayoutKind; seed: number; x: number; y: number; }
 export interface Profile { name: string | null; email: string | null; role: 'admin' | 'operator' | null; }
 
 // Mutations on a Weekly Focus item row, replayed against the fresh row when the offline queue flushes.
