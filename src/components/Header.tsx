@@ -48,7 +48,7 @@ export function Header() {
   return <header style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', alignItems: 'center', gap: mobile ? 8 : 18, padding: mobile ? '12px 14px' : '16px 32px',
     background: 'color-mix(in srgb, var(--bg) 86%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
     <button onClick={() => st.go('stream')} style={{ border: 0, background: 'transparent', padding: 0, fontFamily: SERIF, fontSize: 22, fontWeight: 500, letterSpacing: '-.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--ac)', display: 'inline-block' }} />Sift
+      <img src={import.meta.env.BASE_URL + 'icon.svg'} alt="" width={26} height={26} style={{ display: 'block', borderRadius: 6 }} />Sift
     </button>
     <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
       <div style={{ position: 'relative', width: '100%', maxWidth: 440 }}>
