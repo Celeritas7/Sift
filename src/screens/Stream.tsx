@@ -9,12 +9,12 @@ import { Chip, Eyebrow, inkBtn } from '../components/ui';
 import { segStyle } from '../components/CollageText';
 import type { Anchored } from '../lib/highlights';
 
-export function NoteChips({ n, conflict }: { n: NoteV; conflict?: boolean }) {
+export function NoteChips({ n, conflict, labels = true }: { n: NoteV; conflict?: boolean; labels?: boolean }) {
   const unlocked = useStore(s => s.unlocked);
   return <>
     {n.vault && <Chip t={unlocked ? 'Vault · open' : 'Vault'} strong={!unlocked} />}
     {conflict && <Chip t="Conflict" strong />}
-    {!n.hidden && n.labels.map(l => <Chip key={l} t={l} />)}
+    {labels && !n.hidden && n.labels.map(l => <Chip key={l} t={l} />)}
   </>;
 }
 

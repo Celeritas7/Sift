@@ -17,7 +17,8 @@ export interface NewNote {
   todos?: { text: string; done: boolean }[]; source?: Note['source']; source_file?: string | null; content_hash?: string | null; color?: string | null;
   lang: Note['lang']; created_at?: string; edited_at?: string; image?: { path: string; dataUrl?: string } | null; wfItem?: string | null;
 }
-export interface Toast { id: string; msg: string; }
+/** A toast about note `id`. `undo` adds an Undo button. */
+export interface Toast { id: string; msg: string; undo?: () => void; }
 export interface MapUi { zoom: number; pan: { x: number; y: number }; topic: string | null; hover: string | null; placed: string | null; dragging: string | null; }
 
 const DEFAULT_SETTINGS = (user: string): Settings => ({ user_id: user, monday_digest: true, idle_seconds: 60, ambient_seconds: 20, theme: 'light', updated_at: nowIso() });
@@ -62,6 +63,8 @@ interface State {
   removeNote(id: string): Promise<void>;
   updateNote(id: string, patch: Partial<Note>): Promise<void>;
   toggleTodo(id: string): Promise<void>;
+  /** Make `list` the note's to-dos: rows not in it are deleted, changed rows are saved. */
+  replaceTodos(noteId: string, list: Todo[]): Promise<void>;
   sendTodo(todoId: string, itemKey: string): Promise<void>;
   toggleWfSubtask(itemKey: string, subId: string): Promise<void>;
   mutateWf(itemKey: string, mut: WfMutation): Promise<void>;
@@ -289,6 +292,16 @@ export const useStore = create<State>()((set, get) => {
       const t = get().todos[id]; if (!t) return; const nt: Todo = { ...t, done: !t.done, updated_at: nowIso() };
       set({ todos: { ...get().todos, [id]: nt } }); await db().todos.put(nt); await persist([upsertOp('sift_todos', nt)]);
       if (nt.wf_item_key && nt.wf_subtask_id) await get().mutateWf(nt.wf_item_key, { type: 'set_done', id: nt.wf_subtask_id, done: nt.done });
+    },
+
+    async replaceTodos(noteId, list) {
+      const cur = get().todos; const keep = new Set(list.map(t => t.id)); const now = nowIso();
+      const gone = Object.values(cur).filter(t => t.note_id === noteId && !keep.has(t.id)).map(t => t.id);
+      const changed = list.filter(t => { const o = cur[t.id]; return !o || (['ord', 'text', 'done', 'wf_board_id', 'wf_item_key', 'wf_subtask_id'] as const).some(k => (o[k] ?? null) !== (t[k] ?? null)); }).map(t => ({ ...t, note_id: noteId, updated_at: now }));
+      if (!gone.length && !changed.length) return;
+      const next = { ...cur }; gone.forEach(id => { delete next[id]; }); changed.forEach(t => { next[t.id] = t; }); set({ todos: next });
+      await db().todos.bulkDelete(gone); await db().todos.bulkPut(changed);
+      await persist([...gone.map((id): QueueOp => ({ kind: 'delete', table: 'sift_todos', match: { id } })), ...changed.map(t => upsertOp('sift_todos', t))]);
     },
 
     async sendTodo(todoId, itemKey) {

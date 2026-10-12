@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from '../state/store';
 import { suggestFor, useIndex, useIsMobile, useNotes, usePalette } from '../state/derived';
 import { registerComposer } from '../state/focus';
@@ -76,7 +77,7 @@ export function Composer() {
     const bits = ['Saved to ' + topicName(r.note.topic)]; if (f.pin) bits.push('pinned'); if (r.note.vault) bits.push('in vault');
     if (r.wfItem) bits.push(r.todos + (r.todos === 1 ? ' to-do' : ' to-dos') + ' → ' + r.wfItem); else if (r.todos) bits.push(r.todos + (r.todos === 1 ? ' to-do' : ' to-dos'));
     stopVoice(); setText(''); setCaret(0); setFlags({}); setTopicOv(null); setListOv(null); setImg(null); setAcDismiss(false);
-    st.showToast({ id: r.note.id, msg: bits.join(' · ') });
+    const id = r.note.id; st.showToast({ id, msg: bits.join(' · '), undo: () => void useStore.getState().removeNote(id) });
   };
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -96,17 +97,20 @@ export function Composer() {
 
   const tN = st.toast && all.find(n => n.id === st.toast!.id);
   const expanded = focus && text.trim().length > 0;
+  // With a note open the toast sits above the sheet (the composer is under its backdrop).
+  const toastEl = st.toast && tN && <div role="status" style={{ alignSelf: 'center', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 10, padding: '7px 7px 7px 16px', borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontSize: 13, boxShadow: '0 10px 30px rgba(0,0,0,.2)', animation: 'siftin .2s ease-out', maxWidth: '100%' }}>
+    <span style={{ width: 8, height: 8, borderRadius: '50%', background: topicColor(tN.topic, dark), flex: 'none' }} />
+    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.toast.msg}</span>
+    {st.selId !== tN.id && <button onClick={() => { st.showToast(null); st.openNote(tN.id); }} style={{ border: 0, background: 'transparent', color: 'var(--bg)', fontSize: 12, padding: '4px 8px', opacity: .75 }}>Open</button>}
+    {st.toast.undo && <button onClick={() => { const u = st.toast?.undo; st.showToast(null); u?.(); }} style={{ border: 0, borderRadius: 999, background: 'var(--bg)', color: 'var(--ink)', fontSize: 12, padding: mobile ? '0 16px' : '5px 12px', minHeight: mobile ? 44 : undefined }}>Undo</button>}
+  </div>;
+  const toast = toastEl && st.selId ? createPortal(<div style={{ position: 'fixed', left: 0, right: 0, bottom: mobile ? 16 : 24, zIndex: 60, display: 'flex', justifyContent: 'center', padding: '0 10px', pointerEvents: 'none' }}>{toastEl}</div>, document.body) : toastEl;
   const keep = (fn: () => void) => (e: React.PointerEvent) => { e.preventDefault(); fn(); }; // pointerdown + preventDefault keeps the textarea focused
   const wfTarget = suggestItem(Object.values(st.wf), topic);
   const pvFlags = [...(flags.pin ? ['Pinned'] : []), ...(flags.vault || topic === 'career' ? ['Vault'] : []), ...(flags.wf ? [pd.todos.length ? '→ ' + (wfTarget ?? 'no Weekly Focus item') : 'WF · add a to-do'] : [])];
 
   return <div style={{ position: 'fixed', left: '50%', bottom: mobile ? 78 : 20, transform: 'translateX(-50%)', width: mobile ? 'calc(100% - 20px)' : 'min(760px, calc(100% - 48px))', zIndex: 45, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
-    {st.toast && tN && <div role="status" style={{ alignSelf: 'center', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 10, padding: '7px 7px 7px 16px', borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontSize: 13, boxShadow: '0 10px 30px rgba(0,0,0,.2)', animation: 'siftin .2s ease-out', maxWidth: '100%' }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: topicColor(tN.topic, dark), flex: 'none' }} />
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.toast.msg}</span>
-      <button onClick={() => { st.showToast(null); st.openNote(tN.id); }} style={{ border: 0, background: 'transparent', color: 'var(--bg)', fontSize: 12, padding: '4px 8px', opacity: .75 }}>Open</button>
-      <button onClick={() => void st.removeNote(tN.id)} style={{ border: 0, borderRadius: 999, background: 'var(--bg)', color: 'var(--ink)', fontSize: 12, padding: '5px 12px' }}>Undo</button>
-    </div>}
+    {toast}
     {expanded && <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', border: '1px solid var(--ln)', borderRadius: 18, background: 'var(--sf)', boxShadow: '0 18px 50px rgba(0,0,0,.12)', maxHeight: '36vh', overflow: 'auto', animation: 'siftin .18s ease-out' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--mu)' }}>Preview</span>
