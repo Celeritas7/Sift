@@ -5,6 +5,7 @@ import { MONO, SERIF, topicName } from '../lib/config';
 import { plural } from '../lib/format';
 import { clampMinWords, cutSegs, findMarks, hash, hitLine, hl, look, MIN_WORDS_RANGE, MK, mkBg, mkLine, NOTE_BGS, rnd, segments, type Para, type Seg } from '../lib/collage';
 import { ownColor } from '../lib/highlights';
+import { caretHandlers } from '../lib/keyboard';
 import { Highlighted, useCollageRows, type CollageRow } from '../components/CollageText';
 import { eyebrowStyle, pill, Switch } from '../components/ui';
 import type { CollageMark, LayoutKind } from '../types';
@@ -103,7 +104,7 @@ function Pad({ rows, paras, sticky, fold }: { rows: CollageRow[]; paras: Para[];
       <div aria-hidden="true" style={{ ...text, color: 'transparent', pointerEvents: 'none' }}>
         {back.map((g, i) => <span key={i} style={g.ci == null ? undefined : { background: mkBg(g.ci, dark), borderRadius: 3, boxShadow: `0 0 0 2px ${mkBg(g.ci, dark)}, inset 0 -2px 0 ${mkLine(g.ci)}` }}>{g.t}</span>)}
       </div>
-      <textarea ref={ref} value={cfg.pad} onChange={e => setCollage({ pad: e.target.value })} aria-label="Your writing"
+      <textarea ref={ref} value={cfg.pad} onChange={e => setCollage({ pad: e.target.value })} aria-label="Your writing" {...caretHandlers(() => document.scrollingElement)}
         placeholder="Write or paste your paragraphs here. Select a word and pick a color below to mark it as important."
         style={{ ...text, width: '100%', height: '100%', resize: 'none', overflow: 'hidden', border: 0, outline: 'none', background: 'transparent', caretColor: 'var(--ink)' }} />
     </div>

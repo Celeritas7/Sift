@@ -4,6 +4,7 @@ import { SIM_RELATED } from '../similarity';
 import { MONO, NO_AI, SANS, SERIF, TAG_TO_TOPIC, TOPICS, topicColor, topicName } from '../lib/config';
 import { fmtLong } from '../lib/format';
 import { saveNoteEdit } from '../lib/edit';
+import { caretHandlers } from '../lib/keyboard';
 import { useImageUrl } from '../hooks/useImageUrl';
 import { NoteChips } from '../screens/Stream';
 import { Check, ghostBtn, inkBtn } from './ui';
@@ -71,7 +72,7 @@ export function NoteSheet() {
   const n = st.selId ? byId[st.selId] : null; const img = useImageUrl(n?.image_path);
   const ownBy = useOwnHighlights(); const own = (n && ownBy[n.id]) || NONE;
   const coll = useCollageSheet(st.view === 'collage' && n && !n.hidden ? n : null, own);
-  const downOnBackdrop = useRef(false);
+  const downOnBackdrop = useRef(false); const sheetRef = useRef<HTMLElement>(null);
   // Edit mode: a draft of title + body, and a pending "Discard changes?" with what to do after discarding.
   const [edit, setEdit] = useState<{ id: string; title: string; body: string } | null>(null);
   const [confirm, setConfirm] = useState<{ then: () => void; msg: string; canSave?: boolean } | null>(null);
@@ -118,7 +119,8 @@ export function NoteSheet() {
 
   // Close on a backdrop click only — not when a text selection that started in the sheet ends on the backdrop.
   return <div onPointerDown={e => { downOnBackdrop.current = e.target === e.currentTarget; }} onClick={e => { if (downOnBackdrop.current && e.target === e.currentTarget) close(); }} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,16,12,.38)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', display: 'flex', justifyContent: 'center', alignItems: mobile ? 'flex-end' : 'center', padding: mobile ? '40px 0 0' : 32, overflow: 'auto' }}>
-    <section role="dialog" aria-modal="true" aria-label={n.title} onClick={e => e.stopPropagation()} style={{ ...tone, width: '100%', maxWidth: 720, background: 'var(--sf)', borderRadius: mobile ? '22px 22px 0 0' : 22, boxShadow: '0 30px 80px rgba(0,0,0,.3)', animation: 'siftin .22s ease-out', display: 'flex', flexDirection: 'column', maxHeight: mobile ? 'calc(100vh - 40px)' : 'calc(100vh - 64px)', height: slim ? 'calc(100vh - 40px)' : undefined, overflow: 'auto' }}>
+    <section ref={sheetRef} role="dialog" aria-modal="true" aria-label={n.title} onClick={e => e.stopPropagation()} style={{ ...tone, width: '100%', maxWidth: 720, background: 'var(--sf)', borderRadius: mobile ? '22px 22px 0 0' : 22, boxShadow: '0 30px 80px rgba(0,0,0,.3)', animation: 'siftin .22s ease-out', display: 'flex', flexDirection: 'column', maxHeight: mobile ? 'calc(100dvh - 40px)' : 'calc(100dvh - 64px)', height: slim ? 'calc(100dvh - 40px)' : undefined, overflow: 'auto',
+      paddingBottom: 'var(--kb, 0px)', scrollPaddingBottom: 'calc(var(--kb, 0px) + 48px)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderBottom: '1px solid var(--ln)', position: 'sticky', top: 0, background: 'var(--sf)', zIndex: 2, flexWrap: 'wrap' }}>
         {confirm ? <>
           <span role="alert" style={{ fontSize: 14, color: ink }}>{confirm.msg}</span>
@@ -178,7 +180,7 @@ export function NoteSheet() {
         </div>}
         {img && !slim && <div role="img" aria-label="Attached image" style={{ width: '100%', height: 300, borderRadius: 14, border: '1px solid var(--ln)', background: `var(--bg) url("${img}") center/contain no-repeat` }} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: slim ? 1 : undefined }}>
-          {draft ? <textarea ref={bodyRef} aria-label="Note text" value={draft.body} placeholder="Write…" onChange={e => setEdit({ ...draft, body: e.target.value })}
+          {draft ? <textarea ref={bodyRef} aria-label="Note text" value={draft.body} placeholder="Write…" onChange={e => setEdit({ ...draft, body: e.target.value })} {...caretHandlers(() => sheetRef.current)}
             style={{ ...bodyStyle, ...field, resize: 'none', overflow: 'hidden', minHeight: slim ? '50vh' : 160 }} />
             : <HighlightableBody noteId={n.id} text={n.body} own={own} style={{ ...bodyStyle, textWrap: 'pretty' }}>
               <Highlighted segs={coll ? coll.segs : segments(n.body, [], [], [], own)} concept={coll?.concept} dark={coll ? coll.look.dark : dark} />

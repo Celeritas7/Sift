@@ -5,6 +5,7 @@ import { focusComposer } from './state/focus';
 import { LOCAL_USER, supabase } from './lib/supabase';
 import { unsubscribe } from './lib/sync';
 import { SANS } from './lib/config';
+import { useKeyboardInset } from './lib/keyboard';
 import type { Profile } from './types';
 import { Header, MobileNav } from './components/Header';
 import { Composer } from './components/Composer';
@@ -72,7 +73,7 @@ function useGlobalKeys() {
 }
 
 export function App() {
-  useBoot(); useGlobalKeys(); useIdleAmbient();
+  useBoot(); useGlobalKeys(); useIdleAmbient(); useKeyboardInset();
   const st = useStore(); const { c } = usePalette(); const mobile = useIsMobile();
   const vars = { '--bg': c.bg, '--sf': c.sf, '--sf2': c.sf2, '--ink': c.ink, '--mu': c.mu, '--ln': c.ln, '--ac': c.ac, '--acs': c.acs, '--acink': c.acink } as CSSProperties;
   useEffect(() => {
@@ -80,13 +81,13 @@ export function App() {
     Object.entries(vars).forEach(([k, v]) => document.documentElement.style.setProperty(k, String(v)));
   }, [c]);
 
-  const shell: CSSProperties = { ...vars, minHeight: '100vh', background: 'var(--bg)', color: 'var(--ink)', fontFamily: SANS, fontSize: 14, lineHeight: 1.5, transition: 'background .3s,color .3s' };
+  const shell: CSSProperties = { ...vars, minHeight: '100dvh', background: 'var(--bg)', color: 'var(--ink)', fontFamily: SANS, fontSize: 14, lineHeight: 1.5, transition: 'background .3s,color .3s' };
   if (st.phase === 'boot') return <div style={shell} />;
   if (st.phase === 'signedOut') return <div style={shell}><Login /></div>;
 
   const Screen = { stream: Stream, week: Week, map: MapView, collage: Collage, lens: Lens, todos: Todos, conflicts: Conflicts, archive: Archive }[st.view];
   return <div data-screen-label="Sift" style={shell}>
-    <div style={{ maxWidth: mobile ? 430 : 1240, margin: '0 auto', minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <div style={{ maxWidth: mobile ? 430 : 1240, margin: '0 auto', minHeight: '100dvh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <Header />
       {st.error && <div role="alert" style={{ margin: mobile ? '0 16px' : '0 36px', padding: '10px 14px', borderRadius: 12, background: 'var(--acs)', color: 'var(--ink)', fontSize: 13, display: 'flex', gap: 10, alignItems: 'center' }}>
         <span style={{ flex: 1 }}>{st.error}</span><button onClick={() => st.set({ error: null })} aria-label="Dismiss" style={{ border: 0, background: 'transparent', color: 'var(--mu)' }}>×</button></div>}
