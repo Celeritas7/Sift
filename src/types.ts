@@ -27,7 +27,9 @@ export const TOPIC_PREFIX: Record<string, string> = { eng: 'office:', soft: 'app
 export const modeForTopic = (t: Topic): WfMode => (t === 'eng' ? 'o' : 'p');
 
 export interface Digest { user_id: string; week_of: string; text: string | null; wf_line: string | null; generated_by: 'ai' | 'manual' | null; updated_at: string; }
-export interface Settings { user_id: string; monday_digest: boolean; idle_seconds: number; ambient_seconds: number; theme: 'light' | 'dark'; collage?: CollageSettings | null; updated_at: string; }
+export interface Settings { user_id: string; monday_digest: boolean; idle_seconds: number; ambient_seconds: number; theme: 'light' | 'dark'; collage?: CollageSettings | null; stream?: Partial<StreamSettings> | null; updated_at: string; }
+/** Stream screen: excerpt line under each row, and grouping by month or topic. */
+export interface StreamSettings { excerpt: boolean; group: 'month' | 'topic'; }
 export interface CollageMark { t: string; ci: number; }
 export interface CollageSettings {
   pad: string; marks: CollageMark[]; muted: number[]; noteBg: 'paper' | 'white' | 'kraft' | 'fog' | 'ink'; tilt: boolean;

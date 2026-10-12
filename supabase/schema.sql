@@ -97,6 +97,7 @@ create table if not exists public.sift_settings (
   ambient_seconds int not null default 20,
   theme text not null default 'light',
   collage jsonb,                     -- Collage mode: pad text, marks, muted paragraphs, note colour, tilt
+  stream jsonb,                      -- Stream: { excerpt: boolean, group: 'month' | 'topic' }
   updated_at timestamptz not null default now()
 );
 

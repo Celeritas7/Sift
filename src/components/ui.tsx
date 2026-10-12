@@ -37,5 +37,15 @@ export function Spinner() {
   return <span style={{ width: 11, height: 11, border: '2px solid rgba(255,255,255,.3)', borderTopColor: 'var(--bg)', borderRadius: '50%', animation: 'siftspin .8s linear infinite', display: 'inline-block' }} />;
 }
 
+/** Segmented control: a pill of options, the picked one in ink (Collage and Stream switches). */
+export const pill: CSSProperties = { display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--sf)', border: '1px solid var(--ln)' };
+export function Switch<T extends string>({ value, opts, onPick, label }: { value: T; opts: [T, string][]; onPick: (v: T) => void; label: string }) {
+  const { c } = usePalette();
+  return <div role="group" aria-label={label} style={pill}>
+    {opts.map(([v, t]) => <button key={v} aria-pressed={value === v} onClick={() => onPick(v)}
+      style={{ padding: '5px 12px', border: 0, borderRadius: 999, background: value === v ? c.ink : 'transparent', color: value === v ? c.bg : c.ink, fontSize: 12 }}>{t}</button>)}
+  </div>;
+}
+
 export const inkBtn: CSSProperties = { padding: '8px 14px', border: 0, borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 };
 export const ghostBtn: CSSProperties = { border: '1px solid var(--ln)', background: 'transparent', padding: '4px 10px', borderRadius: 999, fontSize: 12 };

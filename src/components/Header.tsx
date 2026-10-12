@@ -29,6 +29,7 @@ export function useCommands() {
     { key: '/import', label: 'Import from Google Takeout', run: () => st.set({ importOpen: true, query: '' }) },
     { key: '/archive', label: 'Archive', run: () => st.go('archive') },
     { key: dark ? '/light' : '/dark', label: 'Switch theme', run: () => { st.set({ query: '' }); void st.setSettings({ theme: dark ? 'light' : 'dark' }); } },
+    { key: '/excerpts', label: (st.settings.stream?.excerpt ?? true) ? 'Hide excerpts in the stream' : 'Show excerpts in the stream', run: () => { st.set({ query: '' }); void st.setSettings({ stream: { ...st.settings.stream, excerpt: !(st.settings.stream?.excerpt ?? true) } }); } },
     { key: '/pin', label: st.hasPin ? 'Change vault PIN' : 'Set a vault PIN', run: () => { st.set({ query: '' }); st.askPin(null, 'set'); } },
     ...(cloud ? [{ key: '/signout', label: 'Sign out', run: () => void signOut() }] : []),
   ];

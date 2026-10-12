@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from '../state/store';
 import { useAmbientPool, useConflicts, useIsMobile, useNotes, useOwnHighlights, usePalette, type NoteV } from '../state/derived';
 import { useWeeks, useWfStats } from '../state/counts';
-import { MONO, NO_AI, SERIF, TOPICS } from '../lib/config';
+import { DEFAULT_STREAM, MONO, NO_AI, SERIF, TOPICS, topicColor } from '../lib/config';
 import { ago, DOW, fmtShort, MONTHS, plural } from '../lib/format';
 import { focusComposer } from '../state/focus';
-import { Chip, Eyebrow, inkBtn } from '../components/ui';
+import { Chip, Eyebrow, inkBtn, pill, Switch } from '../components/ui';
 import { segStyle } from '../components/CollageText';
+import { hl, marker } from '../lib/collage';
+import { pickExcerpt, type Excerpt } from '../lib/parse';
+import type { StreamSettings } from '../types';
 import type { Anchored } from '../lib/highlights';
 
 export function NoteChips({ n, conflict, labels = true }: { n: NoteV; conflict?: boolean; labels?: boolean }) {
@@ -85,7 +88,19 @@ function OwnQuotes({ body, own }: { body: string; own: Anchored[] }) {
   </div>;
 }
 
-export function NoteRow({ n, conflict, own = [] }: { n: NoteV; conflict: boolean; own?: Anchored[] }) {
+/** One sentence from the body under the summary; search hits get the yellow Collage marker. */
+function ExcerptLine({ x }: { x: Excerpt }) {
+  const { dark } = usePalette(); const mobile = useIsMobile();
+  const parts: { t: string; hit: boolean }[] = []; let at = 0;
+  x.hits.forEach(([a, b]) => { if (a > at) parts.push({ t: x.text.slice(at, a), hit: false }); parts.push({ t: x.text.slice(a, b), hit: true }); at = b; });
+  if (at < x.text.length) parts.push({ t: x.text.slice(at), hit: false });
+  const hit: CSSProperties = { background: marker(hl(0, 'sticky', dark)), mixBlendMode: dark ? 'normal' : 'multiply', padding: '0 1px', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' };
+  const clamp: CSSProperties = mobile ? { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } : { whiteSpace: 'nowrap', textOverflow: 'ellipsis' };
+  return <p style={{ margin: 0, fontFamily: SERIF, fontStyle: 'italic', fontSize: 15, lineHeight: 1.5, color: 'var(--ink)', opacity: .8, maxWidth: '68ch', overflow: 'hidden', ...clamp }}>
+    {parts.map((p, i) => p.hit ? <span key={i} style={hit}>{p.t}</span> : p.t)}</p>;
+}
+
+export function NoteRow({ n, conflict, own = [], excerpt = null }: { n: NoteV; conflict: boolean; own?: Anchored[]; excerpt?: Excerpt | null }) {
   const st = useStore(); const mobile = useIsMobile(); const d = new Date(n.ts); const wc = n.body.trim().split(/\s+/).filter(Boolean).length;
   return <article onClick={() => st.openNote(n.id)} className="h-sf" style={{ display: 'grid', gridTemplateColumns: mobile ? '40px minmax(0,1fr)' : '56px minmax(0,1fr) 80px', gap: mobile ? 12 : 20, padding: '18px 14px', margin: '0 -14px', borderTop: '1px solid var(--ln)', borderRadius: 12, cursor: 'pointer', transition: 'background .15s' }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: MONO, fontSize: 11, color: 'var(--mu)', lineHeight: 1.4 }}>
@@ -97,6 +112,7 @@ export function NoteRow({ n, conflict, own = [] }: { n: NoteV; conflict: boolean
         <NoteChips n={n} conflict={conflict} />
       </div>
       <p style={{ margin: 0, color: 'var(--mu)', fontSize: 14, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', maxWidth: '68ch' }}>{n.hidden ? 'In your vault. Enter your PIN to read it.' : n.sum}</p>
+      {!n.hidden && !own.length && excerpt && <ExcerptLine x={excerpt} />}
       {!n.hidden && own.length > 0 && <OwnQuotes body={n.body} own={own} />}
       {!n.hidden && n.todoList.length > 0 && <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--ac)' }}>
         <span style={{ width: 10, height: 10, border: '1.5px solid var(--ac)', borderRadius: 3, display: 'inline-block' }} />{plural(n.todoList.length, 'to-do')}</div>}
@@ -107,14 +123,63 @@ export function NoteRow({ n, conflict, own = [] }: { n: NoteV; conflict: boolean
   </article>;
 }
 
+const ROW_LIMIT = 8;
+const mdy = (t: number) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+interface Group { key: string; label: string; dot?: string; meta: string; rows: NoteV[]; limit: boolean; }
+
+/** A month or topic: sticky label on the left (above the rows on a phone), rows on the right, optionally capped with "Show all N". */
+function GroupSection({ g, rowOf }: { g: Group; rowOf: (n: NoteV) => ReactNode }) {
+  const mobile = useIsMobile(); const [all, setAll] = useState(false);
+  const rows = g.limit && !all ? g.rows.slice(0, ROW_LIMIT) : g.rows;
+  return <section style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '180px minmax(0,1fr)', gap: mobile ? 10 : 32, alignItems: 'start' }}>
+    <div style={{ position: mobile ? 'static' : 'sticky', top: 84, display: 'flex', flexDirection: mobile ? 'row' : 'column', flexWrap: 'wrap', gap: mobile ? 10 : 6, alignItems: 'baseline' }}>
+      <span style={{ fontFamily: SERIF, fontSize: mobile ? 32 : 52, fontWeight: 300, lineHeight: .95, letterSpacing: '-.03em' }}>
+        {g.dot && <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: g.dot, marginRight: 10, verticalAlign: 'middle' }} />}{g.label}</span>
+      <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--mu)' }}>{g.meta}</span>
+    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      {rows.map(rowOf)}
+      {rows.length < g.rows.length && <button className="h-ac" onClick={() => setAll(true)} style={{ alignSelf: 'flex-start', marginTop: 8, padding: '6px 14px', minHeight: mobile ? 44 : undefined, border: '1px solid var(--ln)', borderRadius: 999, background: 'transparent', fontSize: 12 }}>Show all {g.rows.length}</button>}
+    </div>
+  </section>;
+}
+
 export function Stream() {
-  const st = useStore(); const mobile = useIsMobile(); const { all, active } = useNotes(); const conflicts = useConflicts(); const ownBy = useOwnHighlights();
+  const st = useStore(); const { c, dark } = usePalette(); const { all, active, df } = useNotes(); const conflicts = useConflicts(); const ownBy = useOwnHighlights();
   const conflictIds = useMemo(() => new Set(conflicts.flatMap(p => [p.a, p.b])), [conflicts]);
+  const cfg: StreamSettings = { ...DEFAULT_STREAM, ...(st.settings.stream ?? {}) };
+  const setCfg = (p: Partial<StreamSettings>) => void st.setSettings({ stream: { ...cfg, ...p } });
   const isCmd = st.query.startsWith('/'), q = isCmd ? '' : st.query.trim().toLowerCase();
   const visible = active.filter(n => (n.hidden ? !q : !q || (n.title + ' ' + n.body + ' ' + n.sum).toLowerCase().includes(q)) && (st.filter === 'all' || n.topic === st.filter || n.labels.includes(st.filter)));
-  const months: { key: string; label: string; year: number; rows: NoteV[] }[] = [];
-  visible.forEach(n => { const d = new Date(n.ts), key = d.getFullYear() + '-' + d.getMonth(); let m = months.find(x => x.key === key); if (!m) { m = { key, label: MONTHS[d.getMonth()], year: d.getFullYear(), rows: [] }; months.push(m); } m.rows.push(n); });
-  const filterLabel = TOPICS.find(t => t.id === st.filter)?.name ?? '#' + st.filter;
+  const filterTopic = TOPICS.find(t => t.id === st.filter);
+  const filterLabel = filterTopic?.name ?? '#' + st.filter;
+
+  const groups: Group[] = [];
+  if (cfg.group === 'topic') {
+    const byPin = (a: NoteV, b: NoteV) => (+b.pinned - +a.pinned) || b.ts - a.ts;
+    const meta = (rows: NoteV[]) => plural(rows.length, 'note') + ' · latest ' + mdy(Math.max(...rows.map(n => n.ts)));
+    const known = new Set(TOPICS.map(t => t.id as string));
+    if (filterTopic) { // one topic picked: a single section, locked notes included, no cap
+      if (visible.length) groups.push({ key: filterTopic.id, label: filterTopic.name, dot: topicColor(filterTopic.id, dark), meta: meta(visible), rows: [...visible].sort(byPin), limit: false });
+    } else {
+      TOPICS.forEach(t => {
+        const rows = visible.filter(n => !n.hidden && (known.has(n.topic) ? n.topic === t.id : t.id === 'scrap')).sort(byPin);
+        if (rows.length) groups.push({ key: t.id, label: t.name, dot: topicColor(t.id, dark), meta: meta(rows), rows, limit: true });
+      });
+      const locked = visible.filter(n => n.hidden).sort(byPin);
+      if (locked.length) groups.push({ key: 'vault', label: 'Vault', dot: c.mu, meta: plural(locked.length, 'locked note'), rows: locked, limit: true });
+    }
+  } else visible.forEach(n => {
+    const d = new Date(n.ts), key = d.getFullYear() + '-' + d.getMonth(); let m = groups.find(x => x.key === key);
+    if (!m) { m = { key, label: MONTHS[d.getMonth()], meta: String(d.getFullYear()), rows: [], limit: false }; groups.push(m); }
+    m.rows.push(n);
+  });
+  if (cfg.group === 'month') groups.forEach(m => { m.meta += ' · ' + plural(m.rows.length, 'note'); });
+
+  const rowOf = (n: NoteV) => {
+    const own = ownBy[n.id]; const x = cfg.excerpt && !n.hidden && !own?.length ? pickExcerpt(n.body, n.sum, q, df) : null;
+    return <NoteRow key={n.id} n={n} conflict={conflictIds.has(n.id)} own={own} excerpt={x} />;
+  };
 
   if (!all.length) return <>
     <Hero />
@@ -127,19 +192,20 @@ export function Stream() {
   return <>
     <Resurface />
     <Hero />
-    {st.filter !== 'all' && <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: 13, color: 'var(--mu)' }}>Showing</span>
-      <span style={{ padding: '5px 12px', borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>{filterLabel}
-        <button onClick={() => st.set({ filter: 'all' })} aria-label="Clear filter" style={{ border: 0, background: 'transparent', color: 'var(--bg)', padding: 0, lineHeight: 1, opacity: .7 }}>×</button></span>
-      <span style={{ fontSize: 13, color: 'var(--mu)' }}>{plural(visible.length, 'note')}</span>
-    </div>}
-    {months.map(m => <section key={m.key} style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '180px minmax(0,1fr)', gap: mobile ? 10 : 32, alignItems: 'start' }}>
-      <div style={{ position: mobile ? 'static' : 'sticky', top: 84, display: 'flex', flexDirection: mobile ? 'row' : 'column', gap: mobile ? 10 : 6, alignItems: 'baseline' }}>
-        <span style={{ fontFamily: SERIF, fontSize: mobile ? 32 : 52, fontWeight: 300, lineHeight: .95, letterSpacing: '-.03em' }}>{m.label}</span>
-        <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--mu)' }}>{m.year} · {plural(m.rows.length, 'note')}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      {st.filter !== 'all' && <>
+        <span style={{ fontSize: 13, color: 'var(--mu)' }}>Showing</span>
+        <span style={{ padding: '5px 12px', borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>{filterLabel}
+          <button onClick={() => st.set({ filter: 'all' })} aria-label="Clear filter" style={{ border: 0, background: 'transparent', color: 'var(--bg)', padding: 0, lineHeight: 1, opacity: .7 }}>×</button></span>
+        <span style={{ fontSize: 13, color: 'var(--mu)' }}>{plural(visible.length, 'note')}</span>
+      </>}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={pill}><button aria-pressed={cfg.excerpt} onClick={() => setCfg({ excerpt: !cfg.excerpt })} title="A sentence from each note under its summary"
+          style={{ padding: '5px 12px', border: 0, borderRadius: 999, background: cfg.excerpt ? c.ink : 'transparent', color: cfg.excerpt ? c.bg : c.ink, fontSize: 12 }}>Excerpts</button></div>
+        <Switch label="Group by" value={cfg.group} opts={[['month', 'Month'], ['topic', 'Topic']]} onPick={group => setCfg({ group })} />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>{m.rows.map(n => <NoteRow key={n.id} n={n} conflict={conflictIds.has(n.id)} own={ownBy[n.id]} />)}</div>
-    </section>)}
+    </div>
+    {groups.map(g => <GroupSection key={cfg.group + ':' + g.key} g={g} rowOf={rowOf} />)}
     {!visible.length && <p style={{ margin: 0, fontFamily: SERIF, fontSize: 24, fontWeight: 300, fontStyle: 'italic', color: 'var(--mu)' }}>Nothing here. Clear the search or filter.</p>}
   </>;
 }

@@ -6,11 +6,10 @@ import { plural } from '../lib/format';
 import { cutSegs, findMarks, hash, hitLine, hl, look, MK, mkBg, mkLine, NOTE_BGS, rnd, segments, type Para, type Seg } from '../lib/collage';
 import { ownColor } from '../lib/highlights';
 import { Highlighted, useCollageRows, type CollageRow } from '../components/CollageText';
-import { eyebrowStyle } from '../components/ui';
+import { eyebrowStyle, pill, Switch } from '../components/ui';
 import type { CollageMark, LayoutKind } from '../types';
 
 const fmt = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const pill: CSSProperties = { display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--sf)', border: '1px solid var(--ln)' };
 const smallBtn: CSSProperties = { padding: '4px 10px', border: '1px solid var(--ln)', borderRadius: 999, background: 'transparent', fontSize: 12 };
 const MARK_INK = '#221E1A';
 
@@ -18,14 +17,6 @@ function useWide(q = '(min-width: 860px)') {
   const [m, setM] = useState(() => window.matchMedia(q).matches);
   useEffect(() => { const mq = window.matchMedia(q); const f = () => setM(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f); }, [q]);
   return m;
-}
-
-function Switch<T extends string>({ value, opts, onPick, label }: { value: T; opts: [T, string][]; onPick: (v: T) => void; label: string }) {
-  const { c } = usePalette();
-  return <div role="group" aria-label={label} style={pill}>
-    {opts.map(([v, t]) => <button key={v} aria-pressed={value === v} onClick={() => onPick(v)}
-      style={{ padding: '5px 12px', border: 0, borderRadius: 999, background: value === v ? c.ink : 'transparent', color: value === v ? c.bg : c.ink, fontSize: 12 }}>{t}</button>)}
-  </div>;
 }
 
 export function Collage() {

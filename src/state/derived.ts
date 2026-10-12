@@ -5,6 +5,15 @@ import { DARK, LIGHT } from '../lib/config';
 import { excerpt } from '../lib/parse';
 import type { Note, Todo, Topic } from '../types';
 import { anchorAll, type Anchored } from '../lib/highlights';
+import { tokens } from '../lib/collage';
+
+/** Document frequency over all notes: token → number of notes containing it. Memoised per notes object. */
+const dfCache = new WeakMap<object, Map<string, number>>();
+export function docFreq(notes: Record<string, Note>) {
+  let df = dfCache.get(notes); if (df) return df; df = new Map();
+  for (const n of Object.values(notes)) if (!n.deleted_at) for (const t of tokens(n.title + ' ' + n.body)) df.set(t, (df.get(t) ?? 0) + 1);
+  dfCache.set(notes, df); return df;
+}
 
 export interface NoteV extends Note { ts: number; hidden: boolean; todoList: Todo[]; sum: string; }
 
@@ -21,7 +30,7 @@ export function useNotes() {
       sum: n.summary || excerpt(n.title, n.body),
     })).sort((a, b) => b.ts - a.ts);
     const active = all.filter(n => !n.archived), open = active.filter(n => !n.hidden);
-    return { all, active, open, lockedCount: active.filter(n => n.hidden).length, byId: Object.fromEntries(all.map(n => [n.id, n])) as Record<string, NoteV> };
+    return { all, active, open, lockedCount: active.filter(n => n.hidden).length, byId: Object.fromEntries(all.map(n => [n.id, n])) as Record<string, NoteV>, df: docFreq(notes) };
   }, [notes, todos, unlocked]);
 }
 

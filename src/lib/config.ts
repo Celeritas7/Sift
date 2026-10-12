@@ -1,4 +1,4 @@
-import type { Topic } from '../types';
+import type { StreamSettings, Topic } from '../types';
 
 export const LIGHT = { bg: '#F4F0E8', sf: '#FBF9F4', sf2: '#ECE6DA', ink: '#221E1A', mu: '#6E665E', ln: 'rgba(34,30,26,.12)', ac: '#8E5FC0', acs: 'rgba(142,95,192,.13)', acink: '#FFFFFF' };
 export const DARK = { bg: '#161311', sf: '#1F1B18', sf2: '#2A2521', ink: '#EFE8DC', mu: '#9F958A', ln: 'rgba(239,232,220,.12)', ac: '#B892E3', acs: 'rgba(184,146,227,.16)', acink: '#161311' };
@@ -24,6 +24,7 @@ export const SERIF = 'Newsreader,"Newsreader Variable",Georgia,serif';
 export const MONO = '"JetBrains Mono",ui-monospace,monospace';
 export const SANS = '"Helvetica Neue",Helvetica,"Noto Sans JP","Noto Sans Devanagari",sans-serif';
 
+export const DEFAULT_STREAM: StreamSettings = { excerpt: true, group: 'month' };
 export const WF_BOARD = 'my_week';
 export const BASE_CTX = ['@train', '@desk', '@deep-work', '@keyboard', '@phone-only', '@needs-claude-code', '@home', '@office'];
 export const LINK_HUES = [300, 230, 160, 55, 20];
