@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react';
 import { useStore } from '../state/store';
-import { usePalette } from '../state/derived';
+import { useIsMobile, usePalette } from '../state/derived';
 import { MONO, SERIF, topicName } from '../lib/config';
 import { plural } from '../lib/format';
 import { cutSegs, findMarks, hash, hitLine, hl, look, MK, mkBg, mkLine, NOTE_BGS, rnd, segments, type Para, type Seg } from '../lib/collage';
 import { ownColor } from '../lib/highlights';
 import { Highlighted, useCollageRows, type CollageRow } from '../components/CollageText';
 import { eyebrowStyle } from '../components/ui';
-import type { CollageMark } from '../types';
+import type { CollageMark, LayoutKind } from '../types';
 
 const fmt = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const pill: CSSProperties = { display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--sf)', border: '1px solid var(--ln)' };
@@ -29,7 +29,9 @@ function Switch<T extends string>({ value, opts, onPick, label }: { value: T; op
 }
 
 export function Collage() {
-  const cfg = useStore(s => s.collage), setCollage = useStore(s => s.setCollage); const { c } = usePalette(); const wide = useWide();
+  const cfg = useStore(s => s.collage), setCollage = useStore(s => s.setCollage); const { c } = usePalette(); const wide = useWide(), gutter = useIsMobile() ? 16 : 36;
+  // Phones: the board is narrower than 520px exactly when the viewport is 520px plus both page gutters (36px each) or less.
+  const narrow = useWide('(max-width: 591px)');
   const { rows, paras, marks, live, lockedCount } = useCollageRows();
   const shown = cfg.filter === 'own' ? rows.filter(r => r.own.length) : cfg.filter === 'hide' ? rows.filter(r => r.ok) : rows;
   const matched = rows.filter(r => r.ok).length, sentN = rows.reduce((a, r) => a + r.m.hits.length, 0), ownN = rows.filter(r => r.own.length).length;
@@ -52,7 +54,7 @@ export function Collage() {
     </div>
 
     <div style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(280px,360px) minmax(0,1fr)' : 'minmax(0,1fr)', gap: 28, alignItems: 'start', marginTop: -16 }}>
-      <Pad rows={rows} paras={paras} sticky={wide} />
+      <Pad rows={rows} paras={paras} sticky={wide} fold={narrow} />
       <section aria-label="Matching notes" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
         {cfg.filter === 'own' && !ownN && rows.length ? <div style={{ padding: '48px 24px', border: '1px dashed var(--ln)', borderRadius: 16, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
           <span style={{ fontFamily: SERIF, fontSize: 22 }}>No highlights yet</span>
@@ -61,7 +63,7 @@ export function Collage() {
           <span style={{ fontFamily: SERIF, fontSize: 22 }}>No note says anything like this yet</span>
           <span style={{ color: 'var(--mu)' }}>Try another paragraph, or turn on the ones you switched off.</span>
         </div> : !rows.length ? <p style={{ margin: 0, fontFamily: SERIF, fontSize: 22, fontStyle: 'italic', color: 'var(--mu)' }}>No notes yet.</p>
-          : cfg.view === 'board' ? <Board shown={shown} marks={marks} live={live} /> : <Scatter shown={shown} marks={marks} />}
+          : cfg.view === 'board' ? <Board shown={shown} marks={marks} live={live} /> : <Scatter shown={shown} marks={marks} narrow={narrow} bleed={gutter} />}
         {lockedCount > 0 && <div style={{ fontSize: 12, color: 'var(--mu)' }}>{plural(lockedCount, 'vault note')} {lockedCount === 1 ? 'is' : 'are'} left out of the collage.</div>}
       </section>
     </div>
@@ -69,10 +71,18 @@ export function Collage() {
 }
 
 // ---------- left panel ----------
-function Pad({ rows, paras, sticky }: { rows: CollageRow[]; paras: Para[]; sticky: boolean }) {
+function Pad({ rows, paras, sticky, fold }: { rows: CollageRow[]; paras: Para[]; sticky: boolean; fold: boolean }) {
   const cfg = useStore(s => s.collage), setCollage = useStore(s => s.setCollage); const { c, dark } = usePalette();
   const ref = useRef<HTMLTextAreaElement>(null); const [flash, setFlash] = useState(''); const ft = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(ft.current), []);
+  const [open, setOpen] = useState(false);
+  // Phones: folded into a bar above the collage, so Scatter gets the whole screen width.
+  if (fold && !open) return <button className="h-ac" aria-expanded={false} onClick={() => setOpen(true)}
+    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '12px 16px', border: '1px solid var(--ln)', borderRadius: 14, background: 'var(--sf)', textAlign: 'left', fontSize: 13 }}>
+    <span style={eyebrowStyle}>Your writing</span>
+    <span style={{ flex: 1, minWidth: 0, color: 'var(--mu)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {plural(paras.length, 'paragraph')} · {plural(cfg.marks.length, 'mark')}</span>
+    <span aria-hidden="true" style={{ color: 'var(--mu)' }}>▾</span>
+  </button>;
   const say = (msg: string) => { clearTimeout(ft.current); setFlash(msg); ft.current = setTimeout(() => setFlash(''), 2600); };
 
   const addMark = (ci: number) => {
@@ -93,7 +103,8 @@ function Pad({ rows, paras, sticky }: { rows: CollageRow[]; paras: Para[]; stick
 
   return <aside aria-label="Your writing" style={{ position: sticky ? 'sticky' : 'static', top: 84, display: 'flex', flexDirection: 'column', gap: 14, padding: 18, border: '1px solid var(--ln)', borderRadius: 16, background: 'var(--sf)' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ ...eyebrowStyle, flex: 1 }}>Your writing</span>
+      {fold ? <button aria-expanded onClick={() => setOpen(false)} style={{ ...eyebrowStyle, flex: 1, border: 0, background: 'transparent', padding: 0, textAlign: 'left' }}>Your writing ▴</button>
+        : <span style={{ ...eyebrowStyle, flex: 1 }}>Your writing</span>}
       <button className="h-ac" onClick={() => void paste()} style={smallBtn}>Paste</button>
       <button className="h-ac" onClick={() => setCollage({ pad: '', muted: [], marks: [] })} style={smallBtn}>Clear</button>
     </div>
@@ -164,8 +175,9 @@ function Board({ shown, marks, live }: { shown: CollageRow[]; marks: CollageMark
 
 // ---------- scatter ----------
 interface Ghost { id: string; rot: number; t: string; x: number; y: number; fs: string; ink: string; bg: string; sh: string; }
-interface Drag { id: string; pid: number; sx: number; sy: number; ox: number; oy: number; x: number; y: number; moved: boolean;
-  armed: boolean; touch: boolean; tap: boolean; hold?: ReturnType<typeof setTimeout>; }
+/** sx/sy: where the pointer went down (client px), s0: window.scrollY then, cx/cy: latest pointer position. key/W/cw: the board it started on. */
+interface Drag { id: string; pid: number; sx: number; sy: number; s0: number; cx: number; cy: number; ox: number; oy: number; x: number; y: number;
+  key: LayoutKind; W: number; cw: number; moved: boolean; armed: boolean; touch: boolean; tap: boolean; hold?: ReturnType<typeof setTimeout>; }
 
 /** Up to 3 passages worth showing: the user's own highlights first (widened to whole sentences, in text order),
  *  then top-scoring sentences and sentences holding marks, in text order. */
@@ -188,14 +200,19 @@ function picksFor({ n, m, own }: CollageRow, marks: CollageMark[]): Seg[][] {
 }
 
 const HOLD_MS = 250, HOLD_SLOP = 8;
+const NAV_H = 64;                // MobileNav: 4px padding + 44px buttons + 4px padding + 12px bottom margin
+const EDGE = 60, EDGE_STEP = 12; // auto-scroll while dragging near the top/bottom of the viewport
 
-function Scatter({ shown, marks }: { shown: CollageRow[]; marks: CollageMark[] }) {
-  const cfg = useStore(s => s.collage), saved = useStore(s => s.layout.collage), shuffle = useStore(s => s.shuffleCollage); const { c, dark } = usePalette();
+function Scatter({ shown, marks, narrow, bleed }: { shown: CollageRow[]; marks: CollageMark[]; narrow: boolean; bleed: number }) {
+  const key: LayoutKind = narrow ? 'collage-m' : 'collage';
+  const cfg = useStore(s => s.collage), saved = useStore(s => s.layout[key]), shuffle = useStore(s => s.shuffleCollage); const { c, dark } = usePalette(); const navShown = useIsMobile();
   const boardRef = useRef<HTMLDivElement>(null); const [bw, setBw] = useState(900); const [, setTick] = useState(0);
   const drag = useRef<Drag | null>(null); const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [z, setZ] = useState<{ top: number; m: Record<string, number> }>({ top: 100, m: {} });
   const [ghosts, setGhosts] = useState<Ghost[]>([]); const gk = useRef(''); const [bottom, setBottom] = useState(0);
+  const [arrange, setArrange] = useState(false); const arranging = arrange && narrow; const arrangeRef = useRef(arranging); arrangeRef.current = arranging;
   useEffect(() => { setZ({ top: 100, m: {} }); }, [cfg.seed]);
+  useEffect(() => { if (!narrow) setArrange(false); }, [narrow]);
   const front = (id: string) => setZ(s => ({ top: s.top + 1, m: { ...s.m, [id]: s.top + 1 } }));
 
   /** Copy every mark span to a layer above all cards (marked words are never hidden), and find the lowest card bottom.
@@ -218,14 +235,25 @@ function Scatter({ shown, marks }: { shown: CollageRow[]; marks: CollageMark[] }
 
   // Mouse: drag after 4px. Touch/pen: the page scrolls (touch-action: pan-y) unless the finger is held still for 250 ms;
   // after that the card follows the finger and scrolling is blocked. A quick tap opens the note.
+  // Arrange mode (phones): cards use touch-action: none and follow the finger at once; taps don't open notes.
   useEffect(() => {
+    let raf = 0;
     const clearHold = (d: Drag) => { clearTimeout(d.hold); d.hold = undefined; };
-    const mv = (e: PointerEvent) => { const d = drag.current; if (!d || e.pointerId !== d.pid) return; const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    // Card position from the finger in board coordinates, so it stays under the finger while the page auto-scrolls.
+    // x is clamped to keep a quarter of the card on the board; y only has to stay below the top edge.
+    const place = (d: Drag) => { d.x = Math.round(Math.min(d.W - d.cw * 0.75, Math.max(-d.cw * 0.25, d.ox + d.cx - d.sx)));
+      d.y = Math.round(Math.max(0, d.oy + d.cy - d.sy + window.scrollY - d.s0)); setDragPos({ id: d.id, x: d.x, y: d.y }); };
+    const tick = () => { const d = drag.current; if (!d?.moved) { raf = 0; return; }
+      const h = window.innerHeight, v = d.cy < EDGE ? -(EDGE - d.cy) / EDGE : d.cy > h - EDGE ? (d.cy - h + EDGE) / EDGE : 0;
+      if (v) { window.scrollBy({ top: Math.round(Math.max(-1, Math.min(1, v)) * EDGE_STEP) || Math.sign(v), behavior: 'instant' }); place(d); }
+      raf = requestAnimationFrame(tick); };
+    const mv = (e: PointerEvent) => { const d = drag.current; if (!d || e.pointerId !== d.pid) return; d.cx = e.clientX; d.cy = e.clientY; const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
       if (!d.armed) { if (Math.abs(dx) + Math.abs(dy) > HOLD_SLOP) { clearHold(d); drag.current = null; } return; } // moved before the hold: it's a scroll
       if (!d.moved && Math.abs(dx) + Math.abs(dy) <= 4) return; d.moved = true;
-      d.x = Math.round(Math.max(-40, d.ox + dx)); d.y = Math.round(Math.max(10, d.oy + dy)); setDragPos({ id: d.id, x: d.x, y: d.y }); };
+      place(d); if (!raf) raf = requestAnimationFrame(tick); };
     const end = (open: boolean) => (e: PointerEvent) => { const d = drag.current; if (!d || e.pointerId !== d.pid) return; clearHold(d); drag.current = null; const st = useStore.getState();
-      if (d.moved) void st.setLayout('collage', d.id, d.x, d.y); else if (open && d.tap) st.openNote(d.id);
+      // x is stored as a fraction of the board width, so a rotated phone or a resized window keeps the arrangement.
+      if (d.moved) void st.setLayout(d.key, d.id, +(d.x / d.W).toFixed(4), d.y); else if (open && d.tap) st.openNote(d.id);
       setDragPos(null); };
     const up = end(true), cancel = end(false);
     // Once a touch drag is armed, stop the browser from turning the finger's movement into a scroll.
@@ -234,37 +262,51 @@ function Scatter({ shown, marks }: { shown: CollageRow[]; marks: CollageMark[] }
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel);
     window.addEventListener('touchmove', touch, { passive: false }); window.addEventListener('scroll', scroll, { passive: true, capture: true });
     return () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel);
-      window.removeEventListener('touchmove', touch); window.removeEventListener('scroll', scroll, { capture: true }); if (drag.current) clearTimeout(drag.current.hold); };
+      window.removeEventListener('touchmove', touch); window.removeEventListener('scroll', scroll, { capture: true }); cancelAnimationFrame(raf); if (drag.current) clearTimeout(drag.current.hold); };
   }, []);
 
-  const W = Math.max(320, bw), cw = bw < 520 ? 220 : 250, perRow = Math.max(1, Math.floor((W - cw) / (cw * 0.7)) + 1), stepX = perRow > 1 ? (W - cw) / (perRow - 1) : 0, stepY = 128;
+  const W = narrow ? Math.max(200, bw) : Math.max(320, bw), cw = narrow ? Math.max(190, Math.round(W * 0.64)) : 250;
+  const clampX = (x: number) => Math.round(Math.min(W - cw * 0.75, Math.max(-cw * 0.25, x)));
+  // Saved x is a fraction of the board width; rows saved before that (px on the desktop board) are read as px.
+  const fromSaved = (p: { x: number; y: number }) => ({ x: clampX(Math.abs(p.x) <= 2 ? p.x * W : p.x), y: Math.max(0, Math.round(p.y)) });
+  const perRow = Math.max(1, Math.floor((W - cw) / (cw * 0.7)) + 1), stepX = perRow > 1 ? (W - cw) / (perRow - 1) : 0, stepY = 128;
   const cards = shown.map((r, idx) => { const { n } = r, h = hash(n.id) + cfg.seed * 977, row = Math.floor(idx / perRow), col = idx % perRow, shift = row % 2 ? stepX * 0.5 : 0;
-    const auto = { x: Math.round(Math.min(W - cw + 10, Math.max(-6, col * stepX + shift - (row % 2 && col === perRow - 1 ? stepX : 0) + (rnd(h) - 0.5) * 40))), y: Math.round(30 + row * stepY + rnd(h + 3) * 28) };
-    const at = dragPos?.id === n.id ? dragPos : saved[n.id] || auto;
-    return { r, at, rot: cfg.tilt ? +((rnd(h + 7) - 0.5) * 8).toFixed(1) : 0, z: z.m[n.id] || (r.ok ? 50 : 1) + idx, L: look(n.id, n.topic, cfg, c, dark) };
+    // Phones: a portrait zigzag, alternating left and right, each card 140px below the last so neighbours overlap by about a third.
+    const auto = narrow ? { x: Math.round((idx % 2 ? W - cw - 8 : 8) + (rnd(h) - 0.5) * 24), y: 16 + idx * 140 }
+      : { x: Math.round(Math.min(W - cw + 10, Math.max(-6, col * stepX + shift - (row % 2 && col === perRow - 1 ? stepX : 0) + (rnd(h) - 0.5) * 40))), y: Math.round(30 + row * stepY + rnd(h + 3) * 28) };
+    const at = dragPos?.id === n.id ? dragPos : saved[n.id] ? fromSaved(saved[n.id]) : auto;
+    return { r, at, rot: cfg.tilt ? +((rnd(h + 7) - 0.5) * (narrow ? 10 : 8)).toFixed(1) : 0, z: z.m[n.id] || (r.ok ? 50 : 1) + idx, L: look(n.id, n.topic, cfg, c, dark) };
   });
   const down = (e: RPointerEvent, id: string, at: { x: number; y: number }) => { if (e.button > 0 || drag.current) return;
-    const touch = e.pointerType !== 'mouse';
+    const touch = e.pointerType !== 'mouse', now = !touch || arrangeRef.current;
     if (!touch) e.preventDefault(); // mouse: no text selection; touch: leave the gesture to the browser so the page can scroll
-    const d: Drag = { id, pid: e.pointerId, sx: e.clientX, sy: e.clientY, ox: at.x, oy: at.y, x: at.x, y: at.y, moved: false, armed: !touch, touch, tap: true };
-    if (touch) d.hold = setTimeout(() => { if (drag.current !== d) return; d.armed = true; d.tap = false; front(id); }, HOLD_MS); else front(id);
+    const d: Drag = { id, pid: e.pointerId, sx: e.clientX, sy: e.clientY, s0: window.scrollY, cx: e.clientX, cy: e.clientY, ox: at.x, oy: at.y, x: at.x, y: at.y,
+      key, W, cw, moved: false, armed: now, touch, tap: !arrangeRef.current };
+    if (!now) d.hold = setTimeout(() => { if (drag.current !== d) return; d.armed = true; d.tap = false; navigator.vibrate?.(10); front(id); }, HOLD_MS); else front(id);
     drag.current = d; };
   const byId = Object.fromEntries(cards.map(k => [k.r.n.id, k]));
   const noMenu = (e: React.MouseEvent) => { if (drag.current?.touch) e.preventDefault(); }; // long-press must not open the context menu
+  const ta = arranging ? 'none' : 'pan-y', H = Math.max(560, bottom + 120);
 
   return <>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ flex: 1, fontSize: 13, color: 'var(--mu)' }}>Marked words stay on top, even when notes cover each other. Drag to move (press and hold on touch), click to open.</span>
+      <span role="status" style={{ flex: 1, fontSize: 13, color: arranging ? 'var(--ac)' : 'var(--mu)' }}>{arranging ? 'Drag notes anywhere · tap Done to finish'
+        : narrow ? 'Tap a note to open it · press and hold to drag.' : 'Marked words stay on top, even when notes cover each other. Drag to move (press and hold on touch), click to open.'}</span>
       <button className="h-ac" onClick={() => { setDragPos(null); void shuffle(); }} style={{ ...smallBtn, padding: '6px 14px', background: 'var(--sf)' }}>Shuffle</button>
+      {narrow && <button className="h-ac" aria-pressed={arranging} onClick={() => setArrange(a => !a)}
+        style={{ ...smallBtn, padding: '6px 14px', background: arranging ? 'var(--ac)' : 'var(--sf)', color: arranging ? 'var(--bg)' : 'var(--ink)', borderColor: arranging ? 'var(--ac)' : 'var(--ln)' }}>{arranging ? 'Done' : 'Arrange'}</button>}
     </div>
-    <div ref={boardRef} style={{ position: 'relative', isolation: 'isolate', height: Math.max(560, bottom + 60), borderRadius: 16, background: cfg.concept === 'sticky' ? (dark ? '#2A241F' : '#D9CDB8') : 'var(--sf2)',
-      border: '1px solid var(--ln)', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
+    <div ref={boardRef} style={{ position: 'relative', isolation: 'isolate', borderRadius: narrow ? 0 : 16, background: cfg.concept === 'sticky' ? (dark ? '#2A241F' : '#D9CDB8') : 'var(--sf2)',
+      // Phones: edge to edge, with room below the last card for the bottom nav and the home indicator.
+      height: narrow ? `calc(${H}px + ${navShown ? NAV_H : 0}px + env(safe-area-inset-bottom))` : H, margin: narrow ? `0 -${bleed}px` : 0,
+      border: '1px solid var(--ln)', borderLeftWidth: narrow ? 0 : 1, borderRightWidth: narrow ? 0 : 1, outline: arranging ? '1.5px solid var(--ac)' : 'none', outlineOffset: -1.5,
+      overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
       {cards.map(({ r, at, rot, z: zi, L }) => { const picks = picksFor(r, marks);
         return <div key={r.n.id} data-cid={r.n.id} data-rot={rot} role="button" tabIndex={0} aria-label={r.n.title || 'Untitled'}
           onPointerDown={e => down(e, r.n.id, at)} onContextMenu={noMenu} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); useStore.getState().openNote(r.n.id); } }}
           style={{ position: 'absolute', left: at.x, top: at.y, width: cw, zIndex: zi, padding: '20px 18px 16px', minHeight: cfg.concept === 'sticky' ? Math.round(cw * 0.8) : 0,
             border: '1px solid ' + L.border, borderRadius: L.radius, background: L.bg, color: L.ink, boxShadow: L.shadow, transform: `rotate(${rot}deg)`, opacity: r.ok ? 1 : .4,
-            cursor: 'grab', touchAction: 'pan-y', WebkitTouchCallout: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            cursor: 'grab', touchAction: ta, WebkitTouchCallout: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {L.tape && <span aria-hidden="true" style={{ position: 'absolute', top: -9, left: 'calc(50% - 30px)', width: 60, height: 18, background: L.tape, transform: `rotate(${L.tapeRot}deg)`, borderRadius: 1 }} />}
           <span style={{ display: 'flex', gap: 8, fontFamily: MONO, fontSize: 10, letterSpacing: '.05em', textTransform: 'uppercase', color: L.mu }}>
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.n.title || 'Untitled'}</span><span>{fmt(r.n.ts)}</span>
@@ -275,7 +317,7 @@ function Scatter({ shown, marks }: { shown: CollageRow[]; marks: CollageMark[] }
         </div>; })}
       {ghosts.map((g, i) => { const k = byId[g.id]; return <span key={i} aria-hidden="true" onPointerDown={e => k && down(e, g.id, k.at)} onContextMenu={noMenu}
         style={{ position: 'absolute', left: g.x, top: g.y, transform: `translate(-50%,-50%) rotate(${g.rot}deg)`, zIndex: 9500, opacity: k && !k.r.ok ? .4 : 1, whiteSpace: 'nowrap', fontFamily: SERIF, fontSize: g.fs, lineHeight: 1.45,
-          fontWeight: 700, color: g.ink, background: g.bg, boxShadow: (g.sh && g.sh !== 'none' ? g.sh + ', ' : '') + '0 3px 10px rgba(0,0,0,.25)', borderRadius: 3, padding: '0 2px', cursor: 'grab', touchAction: 'pan-y', WebkitTouchCallout: 'none' }}>{g.t}</span>; })}
+          fontWeight: 700, color: g.ink, background: g.bg, boxShadow: (g.sh && g.sh !== 'none' ? g.sh + ', ' : '') + '0 3px 10px rgba(0,0,0,.25)', borderRadius: 3, padding: '0 2px', cursor: 'grab', touchAction: ta, WebkitTouchCallout: 'none' }}>{g.t}</span>; })}
     </div>
   </>;
 }

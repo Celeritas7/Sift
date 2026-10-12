@@ -26,11 +26,12 @@ const byId = <T,>(rows: T[], k: (r: T) => string) => Object.fromEntries(rows.map
 const newer = (remote: { updated_at?: string }, local?: { updated_at?: string }) => !local || Date.parse(remote.updated_at || '') >= Date.parse(local.updated_at || '');
 const LOCAL_SALT = 'sift-local-vault:';
 export type Positions = Record<string, { x: number; y: number }>;
-const NO_LAYOUT = (): Record<LayoutKind, Positions> => ({ map: {}, collage: {} });
+const NO_LAYOUT = (): Record<LayoutKind, Positions> => ({ map: {}, collage: {}, 'collage-m': {} });
+const isCollage = (k: LayoutKind) => k === 'collage' || k === 'collage-m';
 /** Saved positions by layout. Collage keeps only the current shuffle's rows. */
 const groupLayout = (rows: LayoutRow[], seed: number) => {
   const out = NO_LAYOUT();
-  rows.forEach(r => { const k = r.layout ?? 'map'; if (k === 'collage' && (r.seed ?? 0) !== seed) return; out[k][r.note_id] = { x: r.x, y: r.y }; });
+  rows.forEach(r => { const k = r.layout ?? 'map'; if (isCollage(k) && (r.seed ?? 0) !== seed) return; out[k][r.note_id] = { x: r.x, y: r.y }; });
   return out;
 };
 const collageSeed = (s: Settings | null | undefined) => s?.collage?.seed ?? 0;
@@ -156,7 +157,7 @@ export const useStore = create<State>()((set, get) => {
       const seed = collageSeed(settings[0] ? { ...st.settings, ...settings[0] } : st.settings);
       const lay = groupLayout(layout, seed);
       (Object.keys(lay) as LayoutKind[]).forEach(k => Object.entries(st.layout[k]).forEach(([id, p]) => { if (pendingIds.has(id)) lay[k][id] = p; }));
-      const layRows = (Object.keys(lay) as LayoutKind[]).flatMap(k => Object.entries(lay[k]).map(([note_id, p]): LayoutRow => ({ user_id: user, note_id, layout: k, seed: k === 'collage' ? seed : 0, ...p })));
+      const layRows = (Object.keys(lay) as LayoutKind[]).flatMap(k => Object.entries(lay[k]).map(([note_id, p]): LayoutRow => ({ user_id: user, note_id, layout: k, seed: isCollage(k) ? seed : 0, ...p })));
       await db().transaction('rw', [db().notes, db().todos, db().highlights, db().layouts, db().digests, db().dismissals, db().importFiles], async () => {
         await db().notes.clear(); await db().notes.bulkPut(Object.values(n));
         await db().todos.clear(); await db().todos.bulkPut(Object.values(t));
@@ -313,13 +314,15 @@ export const useStore = create<State>()((set, get) => {
 
     async setLayout(kind, noteId, x, y) {
       const lay = get().layout; set({ layout: { ...lay, [kind]: { ...lay[kind], [noteId]: { x, y } } } });
-      const row: LayoutRow = { user_id: get().userId, note_id: noteId, layout: kind, seed: kind === 'collage' ? get().collage.seed : 0, x, y };
+      const row: LayoutRow = { user_id: get().userId, note_id: noteId, layout: kind, seed: isCollage(kind) ? get().collage.seed : 0, x, y };
       await db().layouts.put(row); await persist([upsertOp('sift_note_layout', row)]);
     },
     async resetLayout(kind) {
-      set({ layout: { ...get().layout, [kind]: {} }, ...(kind === 'map' ? { map: { ...get().map, zoom: 1, pan: { x: 0, y: 0 } } } : {}) });
-      await db().layouts.where('layout').equals(kind).delete();
-      await persist([{ kind: 'delete', table: 'sift_note_layout', match: { user_id: get().userId, layout: kind } }]);
+      // A collage reset (shuffle) clears both the desktop and the phone arrangement: both belong to the old seed.
+      const kinds: LayoutKind[] = isCollage(kind) ? ['collage', 'collage-m'] : [kind];
+      set({ layout: { ...get().layout, ...Object.fromEntries(kinds.map(k => [k, {}])) }, ...(kind === 'map' ? { map: { ...get().map, zoom: 1, pan: { x: 0, y: 0 } } } : {}) });
+      await db().layouts.where('layout').anyOf(kinds).delete();
+      await persist(kinds.map((k): QueueOp => ({ kind: 'delete', table: 'sift_note_layout', match: { user_id: get().userId, layout: k } })));
     },
 
     async dismissPair(a, b, on) {

@@ -64,9 +64,9 @@ create table if not exists public.sift_note_links (
 create table if not exists public.sift_note_layout (
   user_id uuid not null default auth.uid(),
   note_id uuid not null references public.sift_notes(id) on delete cascade,
-  layout text not null default 'map' check (layout in ('map', 'collage')),
+  layout text not null default 'map' check (layout in ('map', 'collage', 'collage-m')),
   seed int not null default 0,       -- collage: the scatter shuffle these positions belong to
-  x real not null, y real not null,  -- map: x 0..100, y 0..62.5 · collage: px on the scatter board
+  x real not null, y real not null,  -- map: x 0..100, y 0..62.5 · collage / collage-m: x fraction of board width, y px
   primary key (user_id, note_id, layout)
 );
 

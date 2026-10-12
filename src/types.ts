@@ -37,7 +37,7 @@ export type HighlightColor = 'yellow' | 'pink' | 'green' | 'blue';
 export interface Highlight { id: string; user_id: string; note_id: string; quote: string; start: number; color: HighlightColor; created_at: string; updated_at: string; }
 export interface ConflictDismissal { user_id: string; a: string; b: string; }
 export interface ImportFile { user_id: string; file_name: string; content_hash: string; note_id: string | null; imported_at: string; }
-export type LayoutKind = 'map' | 'collage';
+export type LayoutKind = 'map' | 'collage' | 'collage-m';
 export interface LayoutRow { user_id: string; note_id: string; layout: LayoutKind; seed: number; x: number; y: number; }
 export interface Profile { name: string | null; email: string | null; role: 'admin' | 'operator' | null; }
 
