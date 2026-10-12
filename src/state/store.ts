@@ -78,6 +78,8 @@ interface State {
   /** Highlight body[s, e) of a note. Inside an existing highlight: recolour it; overlapping ones are merged into one. */
   addHighlight(noteId: string, s: number, e: number, color: HighlightColor): Promise<void>;
   removeHighlight(id: string): Promise<void>;
+  /** Put highlight rows back as they were (e.g. undoing an edit that removed them). */
+  restoreHighlights(rows: Highlight[]): Promise<void>;
   /** New scatter seed: forgets the old shuffle's positions and saves the seed right away. */
   shuffleCollage(): Promise<void>;
   refreshLinks(): Promise<void>;
@@ -380,6 +382,12 @@ export const useStore = create<State>()((set, get) => {
     async removeHighlight(id) {
       if (!get().highlights[id]) return; const { [id]: _, ...rest } = get().highlights; set({ highlights: rest });
       await db().highlights.delete(id); await persist([{ kind: 'delete', table: 'sift_highlights', match: { id } }]);
+    },
+
+    async restoreHighlights(rows) {
+      if (!rows.length) return; const now = nowIso(); const back = rows.map(h => ({ ...h, updated_at: now }));
+      set({ highlights: { ...get().highlights, ...byId(back, h => h.id) } });
+      await db().highlights.bulkPut(back); await persist(back.map(h => upsertOp('sift_highlights', h)));
     },
 
     async refreshLinks() { if (supabase && navigator.onLine) { await flush(); await supabase.rpc('sift_refresh_links'); } },

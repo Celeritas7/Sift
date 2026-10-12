@@ -34,14 +34,19 @@ let linksTimer: ReturnType<typeof setTimeout> | undefined;
 export const refreshLinksSoon = (ms = 1500) => { clearTimeout(linksTimer); linksTimer = setTimeout(() => void useStore.getState().refreshLinks().catch(() => {}), ms); };
 
 /** Save new title/body. content_hash, source and source_file stay as they are, so a re-import still skips a Keep note.
- *  Returns an undo that restores the previous text and to-dos, or null when nothing changed. */
+ *  Returns an undo that restores the previous text, to-dos and any highlights the edit removed, or null when nothing changed. */
 export async function saveNoteEdit(id: string, title: string, body: string): Promise<{ undo: () => Promise<void> } | null> {
   const st = useStore.getState(); const n = st.notes[id]; if (!n) return null;
   const next = normalizeEdit(title, body); if (next.title === n.title && next.body === n.body) return null;
   const prev: Partial<Note> = { title: n.title, body: n.body, edited_at: n.edited_at, lang: n.lang };
   const prevTodos = Object.values(st.todos).filter(t => t.note_id === id);
+  const prevHighlights = Object.values(st.highlights).filter(h => h.note_id === id);
   await st.updateNote(id, { ...next, edited_at: nowIso(), lang: detectLang(next.title + '\n' + next.body) }); // re-anchors highlights when the body changed
   if (next.body !== n.body) await st.replaceTodos(id, reconcileTodos(prevTodos, next.body, n));
   refreshLinksSoon();
-  return { undo: async () => { const s = useStore.getState(); await s.updateNote(id, prev); await s.replaceTodos(id, prevTodos); refreshLinksSoon(); } };
+  const after = useStore.getState().highlights; const dropped = prevHighlights.filter(h => !after[h.id]); // quotes the new text no longer contains
+  return { undo: async () => {
+    const s = useStore.getState(); await s.updateNote(id, prev); // moves the surviving highlights back
+    await s.replaceTodos(id, prevTodos); await s.restoreHighlights(dropped); refreshLinksSoon();
+  } };
 }

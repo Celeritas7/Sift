@@ -18,7 +18,7 @@ const NONE: Anchored[] = [];
 const cleanLabel = (s: string) => s.trim().replace(/^#+/, '').trim().toLowerCase();
 
 /** The note's labels, always editable: × removes one, "+ label" adds one (a topic tag moves the note instead). */
-function Labels({ n }: { n: NoteV }) {
+function Labels({ n, beforeLeave }: { n: NoteV; beforeLeave: (then: () => void) => void }) {
   const st = useStore(); const mobile = useIsMobile(); const { all } = useNotes(); const { c } = usePalette();
   const [adding, setAdding] = useState(false); const [val, setVal] = useState(''); const [idx, setIdx] = useState(-1);
   const labelsAll = useMemo(() => [...new Set(all.flatMap(x => x.labels))], [all]);
@@ -33,8 +33,9 @@ function Labels({ n }: { n: NoteV }) {
     const topic = TAG_TO_TOPIC[v] as Topic | undefined;
     if (topic) {
       close(); if (topic === n.topic) return;
-      void st.updateNote(n.id, { topic }); st.showToast({ id: n.id, msg: 'Moved to ' + topicName(topic) });
-      if (topic === 'career' && !st.unlocked) st.set({ selId: null }); // Career lives in the vault
+      const move = () => { void st.updateNote(n.id, { topic }); st.showToast({ id: n.id, msg: 'Moved to ' + topicName(topic) }); };
+      // Career lives in the vault: with the vault locked the sheet closes, so an unsaved draft is saved or discarded first.
+      if (topic === 'career' && !useStore.getState().unlocked) beforeLeave(() => { move(); st.set({ selId: null }); }); else move();
     } else if (!have.has(v)) void st.updateNote(n.id, { labels: [...n.labels, v] });
   };
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -73,7 +74,7 @@ export function NoteSheet() {
   const downOnBackdrop = useRef(false);
   // Edit mode: a draft of title + body, and a pending "Discard changes?" with what to do after discarding.
   const [edit, setEdit] = useState<{ id: string; title: string; body: string } | null>(null);
-  const [confirm, setConfirm] = useState<{ then: () => void } | null>(null);
+  const [confirm, setConfirm] = useState<{ then: () => void; msg: string; canSave?: boolean } | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null); const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   const draft = n && !n.hidden && edit?.id === n.id ? edit : null; const editing = !!draft;
   useEffect(() => { setEdit(null); setConfirm(null); }, [st.selId]);
@@ -91,7 +92,9 @@ export function NoteSheet() {
 
   const dirty = !!draft && (draft.title !== n.title || draft.body !== n.body);
   /** Leave edit mode, then run `then` — after asking first when the draft has changes. */
-  const leave = (then: () => void) => { if (dirty) setConfirm({ then }); else { setEdit(null); then(); } };
+  const leave = (then: () => void) => { if (dirty) setConfirm({ then, msg: 'Discard changes?' }); else { setEdit(null); then(); } };
+  /** Before something that closes the sheet anyway: offer to save the draft first. */
+  const beforeLeave = (then: () => void) => { if (dirty) setConfirm({ then, msg: 'Save your changes before moving to the vault?', canSave: true }); else { setEdit(null); then(); } };
   const discard = () => { const then = confirm?.then; setConfirm(null); setEdit(null); then?.(); };
   const close = () => leave(() => st.set({ selId: null }));
   const cancel = () => leave(() => {});
@@ -100,6 +103,7 @@ export function NoteSheet() {
     const r = await saveNoteEdit(n.id, title, body);
     if (r) st.showToast({ id: n.id, msg: 'Saved', undo: () => void r.undo() });
   };
+  const saveThen = () => { const then = confirm?.then; void save().then(() => then?.()); };
   keys.current = e => {
     if ((e.target as HTMLElement | null)?.dataset?.labelInput) return; // the label input handles its own Esc / Enter
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (confirm) setConfirm(null); else cancel(); }
@@ -117,9 +121,12 @@ export function NoteSheet() {
     <section role="dialog" aria-modal="true" aria-label={n.title} onClick={e => e.stopPropagation()} style={{ ...tone, width: '100%', maxWidth: 720, background: 'var(--sf)', borderRadius: mobile ? '22px 22px 0 0' : 22, boxShadow: '0 30px 80px rgba(0,0,0,.3)', animation: 'siftin .22s ease-out', display: 'flex', flexDirection: 'column', maxHeight: mobile ? 'calc(100vh - 40px)' : 'calc(100vh - 64px)', height: slim ? 'calc(100vh - 40px)' : undefined, overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderBottom: '1px solid var(--ln)', position: 'sticky', top: 0, background: 'var(--sf)', zIndex: 2, flexWrap: 'wrap' }}>
         {confirm ? <>
-          <span role="alert" style={{ fontSize: 14, color: ink }}>Discard changes?</span>
+          <span role="alert" style={{ fontSize: 14, color: ink }}>{confirm.msg}</span>
           <button className="h-sf2" onClick={() => setConfirm(null)} style={{ ...ghostBtn, ...tap, marginLeft: 'auto', color: ink }}>Keep editing</button>
-          <button onClick={discard} style={{ ...inkBtn, ...tap }}>Discard</button>
+          {confirm.canSave ? <>
+            <button className="h-sf2" onClick={discard} style={{ ...ghostBtn, ...tap, color: ink }}>Discard</button>
+            <button onClick={saveThen} style={{ ...inkBtn, ...tap }}>Save &amp; move</button>
+          </> : <button onClick={discard} style={{ ...inkBtn, ...tap }}>Discard</button>}
         </> : editing ? <>
           <button className="h-sf2" onClick={cancel} style={{ ...ghostBtn, ...tap, color: ink }}>Cancel</button>
           {!mobile && <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 11, color: 'var(--mu)' }}>Ctrl/⌘ + Enter saves · Esc cancels</span>}
@@ -137,7 +144,7 @@ export function NoteSheet() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <NoteChips n={n} conflict={conflict} labels={false} />
-            <Labels n={n} />
+            <Labels n={n} beforeLeave={beforeLeave} />
             <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--mu)' }}>{n.lang} · {n.source_file || 'captured in Sift'}</span>
           </div>
           {draft ? <input aria-label="Title" value={draft.title} placeholder="Untitled" onChange={e => setEdit({ ...draft, title: e.target.value })} style={{ ...titleStyle, ...field }} />
