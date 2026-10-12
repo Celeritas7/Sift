@@ -3,7 +3,9 @@ import type { CollageMark, CollageSettings, HighlightColor, Note, Topic } from '
 import type { Anchored } from './highlights';
 import type { Palette } from './config';
 
-export const DEFAULT_COLLAGE: CollageSettings = { pad: '', marks: [], muted: [], noteBg: 'paper', tilt: true, concept: 'sticky', view: 'board', filter: 'hide', seed: 0 };
+export const DEFAULT_COLLAGE: CollageSettings = { pad: '', marks: [], muted: [], noteBg: 'paper', tilt: true, concept: 'sticky', view: 'board', filter: 'hide', seed: 0, minWords: 3 };
+export const MIN_WORDS_RANGE = [1, 8] as const;
+export const clampMinWords = (v: number) => Math.max(MIN_WORDS_RANGE[0], Math.min(MIN_WORDS_RANGE[1], Math.round(v) || 3));
 
 // ---------- colours ----------
 export const STICKY: Record<string, string> = { eng: '#8FD3EE', soft: '#F7A8C8', lang: '#BDE58A', refl: '#F9B872', career: '#C9B6F2', scrap: '#E6DED0' };
@@ -99,28 +101,29 @@ export function findMarks(text: string, marks: CollageMark[]): MarkHit[] {
 export interface Sentence extends Span { raw: string; pi: number | null; sc: number; }
 export interface NoteMatch { sents: Sentence[]; hits: Sentence[]; mrs: MarkHit[]; mset: number[]; pis: number[]; score: number; }
 
-function analyse(text: string, paras: Para[]): Sentence[] {
+function analyse(text: string, paras: Para[], minWords: number): Sentence[] {
   return splitSentences(text).map(se => {
     const raw = text.slice(se.s, se.e), tk = tokens(raw); let best: number | null = null, bs = 0;
     if (tk.length) paras.forEach(p => { if (p.muted) return; const sc = p.tk.filter(a => tk.some(b => same(a, b))).length; if (sc > bs) { bs = sc; best = p.i; } });
-    const hit = best != null && (bs >= 2 || (bs === 1 && tk.length <= 3));
+    const hit = best != null && bs >= minWords;
     return { ...se, raw, pi: hit ? best : null, sc: hit ? bs : 0 };
   });
 }
-export function matchText(text: string, paras: Para[], marks: CollageMark[]): NoteMatch {
-  const sents = analyse(text, paras), hits = sents.filter(x => x.pi != null), mrs = findMarks(text, marks);
+export function matchText(text: string, paras: Para[], marks: CollageMark[], minWords = DEFAULT_COLLAGE.minWords): NoteMatch {
+  const sents = analyse(text, paras, minWords), hits = sents.filter(x => x.pi != null), mrs = findMarks(text, marks);
   return { sents, hits, mrs, mset: [...new Set(mrs.map(m => m.mi))], pis: [...new Set(hits.map(x => x.pi!))].sort((a, b) => a - b),
     score: hits.reduce((a, x) => a + x.sc, 0) + mrs.length * 3 };
 }
 
 /** Per-note memo: a note is re-matched only when its text, the paragraphs or the marks change. */
 const memo = new Map<string, { key: string; m: NoteMatch }>();
-export function matchNote(n: Pick<Note, 'id' | 'body' | 'updated_at'>, paras: Para[], marks: CollageMark[], inputKey: string): NoteMatch {
+export function matchNote(n: Pick<Note, 'id' | 'body' | 'updated_at'>, paras: Para[], marks: CollageMark[], minWords: number, inputKey: string): NoteMatch {
   const key = n.updated_at + '|' + n.body.length + '|' + inputKey, hit = memo.get(n.id);
   if (hit && hit.key === key) return hit.m;
-  const m = matchText(n.body, paras, marks); memo.set(n.id, { key, m }); return m;
+  const m = matchText(n.body, paras, marks, minWords); memo.set(n.id, { key, m }); return m;
 }
-export const inputKey = (paras: Para[], marks: CollageMark[]) => JSON.stringify([paras.map(p => (p.muted ? '-' : '') + p.tk.join(' ')), marks.map(m => m.t.toLowerCase())]);
+export const inputKey = (paras: Para[], marks: CollageMark[], minWords: number) =>
+  JSON.stringify([paras.map(p => (p.muted ? '-' : '') + p.tk.join(' ')), marks.map(m => m.t.toLowerCase()), minWords]);
 
 export const isLive = (paras: Para[], marks: CollageMark[]) => paras.some(p => !p.muted) || marks.length > 0;
 export const passes = (m: NoteMatch, live: boolean) => !live || m.hits.length > 0 || m.mrs.length > 0;

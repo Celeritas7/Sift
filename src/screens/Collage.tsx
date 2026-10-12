@@ -3,7 +3,7 @@ import { useStore } from '../state/store';
 import { useIsMobile, usePalette } from '../state/derived';
 import { MONO, SERIF, topicName } from '../lib/config';
 import { plural } from '../lib/format';
-import { cutSegs, findMarks, hash, hitLine, hl, look, MK, mkBg, mkLine, NOTE_BGS, rnd, segments, type Para, type Seg } from '../lib/collage';
+import { clampMinWords, cutSegs, findMarks, hash, hitLine, hl, look, MIN_WORDS_RANGE, MK, mkBg, mkLine, NOTE_BGS, rnd, segments, type Para, type Seg } from '../lib/collage';
 import { ownColor } from '../lib/highlights';
 import { Highlighted, useCollageRows, type CollageRow } from '../components/CollageText';
 import { eyebrowStyle, pill, Switch } from '../components/ui';
@@ -125,6 +125,16 @@ function Pad({ rows, paras, sticky, fold }: { rows: CollageRow[]; paras: Para[];
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ ...eyebrowStyle, flex: 1 }}>Paragraphs</span><span style={{ fontSize: 12, color: 'var(--mu)' }}>tap to turn off</span>
       </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 12, color: 'var(--mu)' }}>Highlight a sentence when it shares at least</span>
+        <div role="group" aria-label="Minimum shared words" style={{ display: 'flex', alignItems: 'center', gap: 2, padding: 2, border: '1px solid var(--ln)', borderRadius: 999, background: 'var(--bg)' }}>
+          <button className="h-ac" aria-label="Fewer words" disabled={cfg.minWords <= MIN_WORDS_RANGE[0]} onClick={() => setCollage({ minWords: clampMinWords(cfg.minWords - 1) })}
+            style={{ width: 24, height: 24, border: 0, borderRadius: '50%', background: 'transparent', fontSize: 14, lineHeight: 1, color: 'var(--ink)' }}>−</button>
+          <span aria-live="polite" style={{ minWidth: 52, textAlign: 'center', fontSize: 12, fontWeight: 600 }}>{plural(cfg.minWords, 'word')}</span>
+          <button className="h-ac" aria-label="More words" disabled={cfg.minWords >= MIN_WORDS_RANGE[1]} onClick={() => setCollage({ minWords: clampMinWords(cfg.minWords + 1) })}
+            style={{ width: 24, height: 24, border: 0, borderRadius: '50%', background: 'transparent', fontSize: 14, lineHeight: 1, color: 'var(--ink)' }}>+</button>
+        </div>
+      </div>
       {paras.map(p => { const nN = rows.filter(r => r.m.pis.includes(p.i)).length, sN = rows.reduce((a, r) => a + r.m.hits.filter(h => h.pi === p.i).length, 0);
         return <button key={p.i} className="h-ac" aria-pressed={!p.muted} onClick={() => setCollage({ muted: p.muted ? cfg.muted.filter(x => x !== p.i) : [...cfg.muted, p.i] })}
           style={{ display: 'grid', gridTemplateColumns: '14px minmax(0,1fr)', gap: 10, alignItems: 'start', textAlign: 'left', padding: '9px 10px', border: '1px solid var(--ln)', borderRadius: 10, background: 'var(--bg)', opacity: p.muted ? .55 : 1 }}>
@@ -201,16 +211,18 @@ function Scatter({ shown, marks, narrow, bleed }: { shown: CollageRow[]; marks: 
   const drag = useRef<Drag | null>(null); const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [z, setZ] = useState<{ top: number; m: Record<string, number> }>({ top: 100, m: {} });
   const [ghosts, setGhosts] = useState<Ghost[]>([]); const gk = useRef(''); const [bottom, setBottom] = useState(0);
+  const [tall, setTall] = useState(0); const [spread, setSpread] = useState(false); // spread: a no-overlap grid until the next drag/shuffle
   const [arrange, setArrange] = useState(false); const arranging = arrange && narrow; const arrangeRef = useRef(arranging); arrangeRef.current = arranging;
-  useEffect(() => { setZ({ top: 100, m: {} }); }, [cfg.seed]);
+  useEffect(() => { setZ({ top: 100, m: {} }); setSpread(false); }, [cfg.seed]);
   useEffect(() => { if (!narrow) setArrange(false); }, [narrow]);
   const front = (id: string) => setZ(s => ({ top: s.top + 1, m: { ...s.m, [id]: s.top + 1 } }));
 
   /** Copy every mark span to a layer above all cards (marked words are never hidden), and find the lowest card bottom.
    *  Only sets state when something changed, so calling it after every render cannot loop. */
-  const measure = () => { const b = boardRef.current; if (!b) return; const br = b.getBoundingClientRect(), out: Ghost[] = []; let low = 0;
-    b.querySelectorAll<HTMLElement>('[data-cid]').forEach(card => { low = Math.max(low, card.offsetTop + card.offsetHeight); });
-    b.querySelectorAll<HTMLElement>('[data-cid] [data-mk="1"]').forEach(el => { const card = el.closest<HTMLElement>('[data-cid]')!, r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+  const measure = () => { const b = boardRef.current; if (!b) return; const br = b.getBoundingClientRect(), out: Ghost[] = []; let low = 0, hi = 0;
+    b.querySelectorAll<HTMLElement>('[data-cid]').forEach(card => { low = Math.max(low, card.offsetTop + card.offsetHeight); hi = Math.max(hi, card.offsetHeight); });
+    setTall(prev => (prev === hi ? prev : hi));
+    b.querySelectorAll<HTMLElement>('[data-cid]:not([data-dim]) [data-mk="1"]').forEach(el => { const card = el.closest<HTMLElement>('[data-cid]')!, r = el.getBoundingClientRect(), cs = getComputedStyle(el);
       out.push({ id: card.dataset.cid!, rot: Number(card.dataset.rot) || 0, t: el.textContent || '', x: Math.round(r.left + r.width / 2 - br.left - b.clientLeft), y: Math.round(r.top + r.height / 2 - br.top - b.clientTop),
         fs: cs.fontSize, ink: cs.color, bg: cs.backgroundColor, sh: cs.boxShadow }); });
     setBottom(prev => (prev === low ? prev : low));
@@ -260,13 +272,18 @@ function Scatter({ shown, marks, narrow, bleed }: { shown: CollageRow[]; marks: 
   const clampX = (x: number) => Math.round(Math.min(W - cw * 0.75, Math.max(-cw * 0.25, x)));
   // Saved x is a fraction of the board width; rows saved before that (px on the desktop board) are read as px.
   const fromSaved = (p: { x: number; y: number }) => ({ x: clampX(Math.abs(p.x) <= 2 ? p.x * W : p.x), y: Math.max(0, Math.round(p.y)) });
-  const perRow = Math.max(1, Math.floor((W - cw) / (cw * 0.7)) + 1), stepX = perRow > 1 ? (W - cw) / (perRow - 1) : 0, stepY = 128;
+  // Rows step down by just over half the tallest card, so the top half of every card (title + first lines) stays readable.
+  const guessH = cfg.concept === 'sticky' ? Math.round(cw * 0.8) : 230, cardH = tall || guessH;
+  const stepY = spread ? cardH + 24 : Math.max(128, Math.round(cardH * 0.55));
+  const perRow = spread ? Math.max(1, Math.floor((W + 20) / (cw + 20))) : Math.max(1, Math.floor((W - cw) / (cw * 0.7)) + 1), stepX = perRow > 1 ? (W - cw) / (perRow - 1) : 0;
   const cards = shown.map((r, idx) => { const { n } = r, h = hash(n.id) + cfg.seed * 977, row = Math.floor(idx / perRow), col = idx % perRow, shift = row % 2 ? stepX * 0.5 : 0;
     // Phones: a portrait zigzag, alternating left and right, each card 140px below the last so neighbours overlap by about a third.
-    const auto = narrow ? { x: Math.round((idx % 2 ? W - cw - 8 : 8) + (rnd(h) - 0.5) * 24), y: 16 + idx * 140 }
+    const auto = spread ? { x: Math.round(col * stepX), y: 16 + row * stepY }
+      : narrow ? { x: Math.round((idx % 2 ? W - cw - 8 : 8) + (rnd(h) - 0.5) * 24), y: 16 + idx * Math.max(140, stepY) }
       : { x: Math.round(Math.min(W - cw + 10, Math.max(-6, col * stepX + shift - (row % 2 && col === perRow - 1 ? stepX : 0) + (rnd(h) - 0.5) * 40))), y: Math.round(30 + row * stepY + rnd(h + 3) * 28) };
-    const at = dragPos?.id === n.id ? dragPos : saved[n.id] ? fromSaved(saved[n.id]) : auto;
-    return { r, at, rot: cfg.tilt ? +((rnd(h + 7) - 0.5) * (narrow ? 10 : 8)).toFixed(1) : 0, z: z.m[n.id] || (r.ok ? 50 : 1) + idx, L: look(n.id, n.topic, cfg, c, dark) };
+    const at = dragPos?.id === n.id ? dragPos : !spread && saved[n.id] ? fromSaved(saved[n.id]) : auto;
+    // Dim mode: every non-matching card sits behind every matching one (1…n vs 100…n), so a match is never buried by a dimmed note.
+    return { r, at, rot: cfg.tilt && !spread ? +((rnd(h + 7) - 0.5) * (narrow ? 10 : 8)).toFixed(1) : 0, z: z.m[n.id] || (r.ok ? 100 : 1) + idx, L: look(n.id, n.topic, cfg, c, dark) };
   });
   const down = (e: RPointerEvent, id: string, at: { x: number; y: number }) => { if (e.button > 0 || drag.current) return;
     const touch = e.pointerType !== 'mouse', now = !touch || arrangeRef.current;
@@ -274,7 +291,7 @@ function Scatter({ shown, marks, narrow, bleed }: { shown: CollageRow[]; marks: 
     const d: Drag = { id, pid: e.pointerId, sx: e.clientX, sy: e.clientY, s0: window.scrollY, cx: e.clientX, cy: e.clientY, ox: at.x, oy: at.y, x: at.x, y: at.y,
       key, W, cw, moved: false, armed: now, touch, tap: !arrangeRef.current };
     if (!now) d.hold = setTimeout(() => { if (drag.current !== d) return; d.armed = true; d.tap = false; navigator.vibrate?.(10); front(id); }, HOLD_MS); else front(id);
-    drag.current = d; };
+    drag.current = d; setSpread(false); };
   const byId = Object.fromEntries(cards.map(k => [k.r.n.id, k]));
   const noMenu = (e: React.MouseEvent) => { if (drag.current?.touch) e.preventDefault(); }; // long-press must not open the context menu
   const ta = arranging ? 'none' : 'pan-y', H = Math.max(560, bottom + 120);
@@ -283,6 +300,8 @@ function Scatter({ shown, marks, narrow, bleed }: { shown: CollageRow[]; marks: 
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <span role="status" style={{ flex: 1, fontSize: 13, color: arranging ? 'var(--ac)' : 'var(--mu)' }}>{arranging ? 'Drag notes anywhere · tap Done to finish'
         : narrow ? 'Tap a note to open it · press and hold to drag.' : 'Marked words stay on top, even when notes cover each other. Drag to move (press and hold on touch), click to open.'}</span>
+      <button className="h-ac" aria-pressed={spread} title="Lay every note out in a grid with no overlap" onClick={() => { setDragPos(null); setSpread(true); void useStore.getState().resetLayout(key); }}
+        style={{ ...smallBtn, padding: '6px 14px', background: spread ? 'var(--ink)' : 'var(--sf)', color: spread ? 'var(--bg)' : 'var(--ink)' }}>Spread</button>
       <button className="h-ac" onClick={() => { setDragPos(null); void shuffle(); }} style={{ ...smallBtn, padding: '6px 14px', background: 'var(--sf)' }}>Shuffle</button>
       {narrow && <button className="h-ac" aria-pressed={arranging} onClick={() => setArrange(a => !a)}
         style={{ ...smallBtn, padding: '6px 14px', background: arranging ? 'var(--ac)' : 'var(--sf)', color: arranging ? 'var(--bg)' : 'var(--ink)', borderColor: arranging ? 'var(--ac)' : 'var(--ln)' }}>{arranging ? 'Done' : 'Arrange'}</button>}
@@ -293,10 +312,10 @@ function Scatter({ shown, marks, narrow, bleed }: { shown: CollageRow[]; marks: 
       border: '1px solid var(--ln)', borderLeftWidth: narrow ? 0 : 1, borderRightWidth: narrow ? 0 : 1, outline: arranging ? '1.5px solid var(--ac)' : 'none', outlineOffset: -1.5,
       overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
       {cards.map(({ r, at, rot, z: zi, L }) => { const picks = picksFor(r, marks);
-        return <div key={r.n.id} data-cid={r.n.id} data-rot={rot} role="button" tabIndex={0} aria-label={r.n.title || 'Untitled'}
+        return <div key={r.n.id} data-cid={r.n.id} data-rot={rot} data-dim={r.ok ? undefined : ''} role="button" tabIndex={0} aria-label={r.n.title || 'Untitled'}
           onPointerDown={e => down(e, r.n.id, at)} onContextMenu={noMenu} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); useStore.getState().openNote(r.n.id); } }}
           style={{ position: 'absolute', left: at.x, top: at.y, width: cw, zIndex: zi, padding: '20px 18px 16px', minHeight: cfg.concept === 'sticky' ? Math.round(cw * 0.8) : 0,
-            border: '1px solid ' + L.border, borderRadius: L.radius, background: L.bg, color: L.ink, boxShadow: L.shadow, transform: `rotate(${rot}deg)`, opacity: r.ok ? 1 : .4,
+            border: '1px solid ' + L.border, borderRadius: L.radius, background: L.bg, color: L.ink, boxShadow: L.shadow, transform: `rotate(${rot}deg)`, opacity: r.ok ? 1 : .5,
             cursor: 'grab', touchAction: ta, WebkitTouchCallout: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {L.tape && <span aria-hidden="true" style={{ position: 'absolute', top: -9, left: 'calc(50% - 30px)', width: 60, height: 18, background: L.tape, transform: `rotate(${L.tapeRot}deg)`, borderRadius: 1 }} />}
           <span style={{ display: 'flex', gap: 8, fontFamily: MONO, fontSize: 10, letterSpacing: '.05em', textTransform: 'uppercase', color: L.mu }}>
@@ -307,7 +326,7 @@ function Scatter({ shown, marks, narrow, bleed }: { shown: CollageRow[]; marks: 
           </span>)}
         </div>; })}
       {ghosts.map((g, i) => { const k = byId[g.id]; return <span key={i} aria-hidden="true" onPointerDown={e => k && down(e, g.id, k.at)} onContextMenu={noMenu}
-        style={{ position: 'absolute', left: g.x, top: g.y, transform: `translate(-50%,-50%) rotate(${g.rot}deg)`, zIndex: 9500, opacity: k && !k.r.ok ? .4 : 1, whiteSpace: 'nowrap', fontFamily: SERIF, fontSize: g.fs, lineHeight: 1.45,
+        style={{ position: 'absolute', left: g.x, top: g.y, transform: `translate(-50%,-50%) rotate(${g.rot}deg)`, zIndex: 9500, whiteSpace: 'nowrap', fontFamily: SERIF, fontSize: g.fs, lineHeight: 1.45,
           fontWeight: 700, color: g.ink, background: g.bg, boxShadow: (g.sh && g.sh !== 'none' ? g.sh + ', ' : '') + '0 3px 10px rgba(0,0,0,.25)', borderRadius: 3, padding: '0 2px', cursor: 'grab', touchAction: ta, WebkitTouchCallout: 'none' }}>{g.t}</span>; })}
     </div>
   </>;

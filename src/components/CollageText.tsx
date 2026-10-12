@@ -32,13 +32,13 @@ const NONE: Anchored[] = [];
 /** Visible notes matched against the writing pad (debounced 150 ms), passing notes first → score → newest. Notes with own highlights always pass. */
 export function useCollageRows() {
   const { active, lockedCount } = useNotes(); const ownBy = useOwnHighlights();
-  const pad = useStore(s => s.collage.pad), marksNow = useStore(s => s.collage.marks), muted = useStore(s => s.collage.muted);
-  const input = useDebounced(useMemo(() => ({ pad, marks: marksNow, muted }), [pad, marksNow, muted]), 150);
+  const pad = useStore(s => s.collage.pad), marksNow = useStore(s => s.collage.marks), muted = useStore(s => s.collage.muted), minWords = useStore(s => s.collage.minWords);
+  const input = useDebounced(useMemo(() => ({ pad, marks: marksNow, muted, minWords }), [pad, marksNow, muted, minWords]), 150);
   const paras = useMemo(() => paragraphs(input.pad, input.muted), [input]);
-  const key = useMemo(() => inputKey(paras, input.marks), [paras, input.marks]);
+  const key = useMemo(() => inputKey(paras, input.marks, input.minWords), [paras, input.marks, input.minWords]);
   const live = isLive(paras, input.marks);
   const rows = useMemo(() => active.filter(n => !n.hidden).map((n): CollageRow => {
-    const m = matchNote(n, paras, input.marks, key), own = ownBy[n.id] ?? NONE; return { n, m, own, ok: passes(m, live) || own.length > 0 }; })
+    const m = matchNote(n, paras, input.marks, input.minWords, key), own = ownBy[n.id] ?? NONE; return { n, m, own, ok: passes(m, live) || own.length > 0 }; })
     .sort((a, b) => (+b.ok - +a.ok) || b.m.score - a.m.score || b.n.ts - a.n.ts), [active, key, ownBy]);
   return { rows, paras, marks: input.marks, live, lockedCount };
 }
@@ -48,7 +48,7 @@ export function useCollageSheet(n: NoteV | null, own: Anchored[]) {
   const cfg = useStore(s => s.collage); const { c, dark } = usePalette();
   return useMemo(() => {
     if (!n) return null;
-    const paras = paragraphs(cfg.pad, cfg.muted), live = isLive(paras, cfg.marks), m = matchText(n.body, paras, cfg.marks), L = look(n.id, n.topic, cfg, c, dark);
+    const paras = paragraphs(cfg.pad, cfg.muted), live = isLive(paras, cfg.marks), m = matchText(n.body, paras, cfg.marks, cfg.minWords), L = look(n.id, n.topic, cfg, c, dark);
     const parts = [live ? hitLine(m, cfg.marks) : '', own.length ? plural(own.length, 'highlight') + ' of yours' : ''].filter(Boolean);
     return { look: L, concept: cfg.concept, segs: segments(n.body, m.sents, m.mrs, cfg.marks, own),
       line: parts.join(' · ') || (live ? 'Nothing here matches your writing.' : 'Nothing written yet.') };

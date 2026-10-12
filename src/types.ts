@@ -34,6 +34,8 @@ export interface CollageMark { t: string; ci: number; }
 export interface CollageSettings {
   pad: string; marks: CollageMark[]; muted: number[]; noteBg: 'paper' | 'white' | 'kraft' | 'fog' | 'ink'; tilt: boolean;
   concept: 'sticky' | 'marker'; view: 'board' | 'scatter'; filter: 'hide' | 'dim' | 'own'; seed: number;
+  /** Keywords a sentence must share with a paragraph to be highlighted (1–8). */
+  minWords: number;
 }
 export type HighlightColor = 'yellow' | 'pink' | 'green' | 'blue';
 export interface Highlight { id: string; user_id: string; note_id: string; quote: string; start: number; color: HighlightColor; created_at: string; updated_at: string; }
