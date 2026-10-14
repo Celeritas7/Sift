@@ -156,6 +156,14 @@ export function Composer() {
           style={{ padding: '4px 11px', border: '1px solid var(--ln)', borderRadius: 999, background: 'var(--bg)', fontSize: 12 }}>{k[0].toUpperCase() + k.slice(1)}</button>)}
         {!mobile && <span style={{ fontSize: 12, color: 'var(--mu)', marginLeft: 'auto' }}>⌘/Ctrl + Enter saves</span>}
       </div>}
+      {focus && <div className="noscroll" role="radiogroup" aria-label="Topic" style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', padding: '12px 14px 0' }}>
+        <span style={{ fontSize: 12, color: 'var(--mu)', marginRight: 2, flex: 'none' }}>Topic</span>
+        {TOPICS.map(tp => { const on = topic === tp.id, picked = on && topicOv === tp.id;
+          return <button key={tp.id} role="radio" aria-checked={on} onPointerDown={keep(() => setTopicOv(picked ? null : tp.id))}
+            style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: mobile ? '6px 11px' : '4px 11px', border: `1px solid ${on ? c.ac : c.ln}`, borderRadius: 999, background: picked ? c.ac : on ? c.acs : c.bg, color: picked ? c.acink : c.ink, fontSize: 12 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: picked ? c.acink : topicColor(tp.id, dark) }} />{tp.name}
+            {on && !picked && topicTag && <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--ac)' }}>{topicTag}</span>}</button>; })}
+      </div>}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 8px 8px 18px' }}>
         <textarea ref={e => { el.current = e; registerComposer(e); }} value={text} rows={focus ? Math.min(8, Math.max(1, text.split('\n').length)) : 1} aria-label="Write a note"
           onChange={e => { setText(e.target.value); setCaret(e.target.selectionStart); setAcDismiss(false); setAcIdx(0); }}
