@@ -45,7 +45,7 @@ PIN is never stored in the client. `rpc('sift_set_pin', {p_pin})` once; `rpc('si
 Dexie tables mirror sift_notes/sift_todos. Writes go to Dexie + a `queue` table; a flusher posts to Supabase on `online`/interval; conflicts resolve by newer `updated_at`.
 
 ## 7. AI summaries and weekly digests (optional)
-Summaries ("Summarise" on a note, `/summarize` for every note without one) and digests ("Write digest", and the Monday auto-digest switch on Lens) are written by Claude through the Supabase Edge Function [`supabase/functions/sift-ai`](../supabase/functions/sift-ai/). The API key lives only in the function's secrets, never in the app (the app is public on GitHub Pages).
+Summaries ("Summarise" on a note, `/summarize` for every note without one), digests ("Write digest", and the Monday auto-digest switch on Lens) and the Chat comments ("Let them talk") are written by Claude through the Supabase Edge Function [`supabase/functions/sift-ai`](../supabase/functions/sift-ai/). The API key lives only in the function's secrets, never in the app (the app is public on GitHub Pages).
 
 1. Create an API key at https://platform.claude.com (Settings → API keys) and add billing.
 2. With the [Supabase CLI](https://supabase.com/docs/guides/cli), from the repository root:
@@ -60,4 +60,4 @@ Summaries ("Summarise" on a note, `/summarize` for every note without one) and d
 
 What is sent: the title and body of the notes you ask about, read by the function as you (row-level security applies). **Vault notes are never sent**: the app leaves them out and the function's query excludes `vault = true`. Results are saved through the app's normal sync; the function writes nothing.
 
-Model and cost: `claude-opus-5-5` ($4 per million input tokens, $20 per million output tokens, thinking included in output), with server-side fallback if a request is declined. Summaries run at low effort in batches of up to 20 notes; digests at medium effort. As a rough guide, summarising a few hundred notes once costs a dollar or two, and a weekly digest about a cent; check real spend in the Claude Console. Turn the Monday auto-digest off on Lens if you only want digests on request.
+Model and cost: `claude-opus-5-5` ($4 per million input tokens, $20 per million output tokens, thinking included in output), with server-side fallback if a request is declined. Summaries run at low effort in batches of up to 20 notes; digests at medium effort. As a rough guide, summarising a few hundred notes once costs a dollar or two, a weekly digest about a cent, and one "Let them talk" a few cents; check real spend in the Claude Console. Turn the Monday auto-digest off on Lens if you only want digests on request.

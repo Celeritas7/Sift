@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useIndex, useIsMobile, useNotes, usePalette } from '../state/derived';
+import { useStore } from '../state/store';
 import { buildChat, initials } from '../lib/chat';
 import { durationMs, H, LENGTHS, pickMime, W } from '../lib/video';
 import { buildScene, drawFrame, loadFonts, recordScene, type Scene } from '../lib/videoRender';
@@ -10,7 +11,7 @@ type Phase = { k: 'idle' } | { k: 'rec'; p: number } | { k: 'done'; url: string;
 
 /** Records the chat as a short 9:16 video in the browser, then shares or saves it. Vault notes are always left out. */
 export function VideoModal({ onClose }: { onClose(): void }) {
-  const { c, dark } = usePalette(); const mobile = useIsMobile(); const { open, byId } = useNotes(); const index = useIndex();
+  const { c, dark } = usePalette(); const talk = useStore(s => s.talk); const mobile = useIsMobile(); const { open, byId } = useNotes(); const index = useIndex();
   const notes = useMemo(() => [...open].filter(n => !n.vault).reverse(), [open]);
   const vaultLeft = open.length - notes.length;
   const choices = LENGTHS.filter((_, i) => i === 0 || notes.length > LENGTHS[i - 1]);
@@ -26,10 +27,10 @@ export function VideoModal({ onClose }: { onClose(): void }) {
     const cv = canvas.current; if (!cv || !fonts) return; const ctx = cv.getContext('2d')!;
     const { msgs } = buildChat(notes.map(n => ({ id: n.id, topic: n.topic, title: n.title || 'Untitled', sum: n.sum, ts: n.ts, pinned: n.pinned, labels: n.labels, todos: n.todoList })), (a, b) => index.sim(a, b), count);
     const members = TOPICS.map(t => t.id as string).filter(t => msgs.some(m => m.topic === t));
-    scene.current = buildScene(ctx, { msgs, members, c, color: t => topicColor(t, dark), name: topicName, initials,
+    scene.current = buildScene(ctx, { msgs, members, c, color: t => topicColor(t, dark), name: topicName, initials, comments: id => talk.filter(x => x.note_id === id),
       quote: id => { const q = byId[id]; return q && !q.vault ? { topic: q.topic, title: q.title || 'Untitled' } : null; } });
     drawFrame(ctx, scene.current, scene.current.duration);
-  }, [fonts, count, notes, index, c, dark, byId]);
+  }, [fonts, count, notes, index, c, dark, byId, talk]);
   useEffect(() => () => abort.current?.abort(), []); // closing the panel stops a recording
   useEffect(() => () => { if (phase.k === 'done') URL.revokeObjectURL(phase.url); }, [phase]);
 

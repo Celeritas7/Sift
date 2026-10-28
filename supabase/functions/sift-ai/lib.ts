@@ -62,3 +62,57 @@ export const digestInput = (weekOf: string, notes: NoteRow[]) =>
 
 export const isWeekOf = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 export const isIdList = (x: unknown, max = MAX_IDS): x is string[] => Array.isArray(x) && x.length > 0 && x.length <= max && x.every(i => typeof i === 'string' && /^[0-9a-f-]{36}$/i.test(i));
+
+// "Let them talk": topics comment on each other's notes in the Chat view.
+export const MAX_TALK_IDS = 40;
+/** Who may comment. Career is left out: it is the vault topic, so it must never seem to know anything. */
+export const TALKERS: Record<string, string> = {
+  eng: 'Engineering at work: precise and practical, thinks in specs, part numbers and deadlines',
+  soft: 'Building software: a builder who wants to ship, spots the app idea in anything',
+  lang: 'Language learning: curious about words, now and then drops a Japanese or Marathi word with its meaning',
+  refl: 'Reflections: slower and thoughtful, asks what something means for the person',
+  scrap: 'Scraps: quick and playful, the friend who remembers odd fragments',
+};
+export interface Comment { note_id: string; topic: string; text: string; }
+
+export const TALK_SYSTEM = `Sift shows a person's notes as a group chat: each note is a message from its topic. You write a few short comments in which one topic reacts to another topic's note, to make the chat feel alive and to surface connections the person may have missed.
+
+The topics who can comment, and how each sounds:
+${Object.entries(TALKERS).map(([id, d]) => `- ${id}: ${d}`).join('\n')}
+
+Rules:
+- Comment only where it adds something: a link to another note in the list (name it by its title), a question worth asking, a nudge about something unfinished, or a light joke grounded in the notes.
+- Never comment on a note from the same topic, and never invent facts beyond the notes.
+- Each comment is one or two sentences, at most 25 words, in English, warm and specific. No advice lectures, no hashtags, no emoji spam (one at most).
+- Spread comments across different notes and topics. Write about one comment per four notes, at most 10.`;
+
+export const TALK_SCHEMA = {
+  type: 'object',
+  properties: { comments: { type: 'array', items: { type: 'object',
+    properties: { note_id: { type: 'string' }, topic: { type: 'string', enum: Object.keys(TALKERS) }, text: { type: 'string' } },
+    required: ['note_id', 'topic', 'text'], additionalProperties: false } } },
+  required: ['comments'], additionalProperties: false,
+} as const;
+
+export const talkInput = (notes: NoteRow[]) => 'The chat, oldest first:\n\n' +
+  notes.map(n => `<note id="${n.id}" topic="${n.topic}" date="${n.created_at.slice(0, 10)}">\n<title>${n.title}</title>\n<body>\n${n.body}\n</body>\n</note>`).join('\n\n');
+
+/** Keeps the newest notes that fit in `max` characters (whole notes only, never cut). */
+export function newestThatFit<T extends { title: string; body: string }>(notes: T[], max = BATCH_CHARS): T[] {
+  const out: T[] = []; let size = 0;
+  for (let i = notes.length - 1; i >= 0; i--) { const len = notes[i].title.length + notes[i].body.length + 100; if (out.length && size + len > max) break; out.unshift(notes[i]); size += len; }
+  return out;
+}
+
+/** Valid comments only: on a note that was sent, by a known talker other than the note's own topic, short, one per note+topic, at most 10. */
+export function checkComments(raw: unknown, notes: { id: string; topic: string }[]): Comment[] {
+  const list = (raw as { comments?: unknown })?.comments; if (!Array.isArray(list)) return [];
+  const topicOf = new Map(notes.map(n => [n.id, n.topic])); const seen = new Set<string>(); const out: Comment[] = [];
+  for (const c of list as Record<string, unknown>[]) {
+    const note_id = typeof c?.note_id === 'string' ? c.note_id : '', topic = typeof c?.topic === 'string' ? c.topic : '';
+    const text = typeof c?.text === 'string' ? c.text.replace(/\s+/g, ' ').trim() : '';
+    if (!topicOf.has(note_id) || !(topic in TALKERS) || topicOf.get(note_id) === topic || !text || text.length > 220 || seen.has(note_id + topic)) continue;
+    seen.add(note_id + topic); out.push({ note_id, topic, text }); if (out.length === 10) break;
+  }
+  return out;
+}

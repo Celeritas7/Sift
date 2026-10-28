@@ -4,13 +4,16 @@ import { durationMs, H, msgStart, prog, scrollAt, T_MSG, T_REACT, W, wrap } from
 import { MONO, SANS, SERIF } from './config';
 
 export interface Palette { bg: string; sf: string; sf2: string; ink: string; mu: string; ln: string; ac: string; }
-export interface SceneInput { msgs: ChatMsg[]; quote: (id: string) => { topic: string; title: string } | null; c: Palette; color: (topic: string) => string; name: (topic: string) => string; initials: (topic: string) => string; members: string[]; }
+export interface SceneInput { msgs: ChatMsg[]; quote: (id: string) => { topic: string; title: string } | null; c: Palette; color: (topic: string) => string; name: (topic: string) => string; initials: (topic: string) => string; members: string[];
+  /** AI comments under a message ("Let them talk"). */
+  comments?: (id: string) => { topic: string; text: string }[]; }
 
 const PAD = 40, AV = 52, BX = PAD + AV + 16, BW = W - BX - PAD, IN = 22, TOP = 210, BOTTOM = H - 110;
-const F = { title: `400 30px ${SERIF}`, sum: `400 23px ${SANS}`, name: `600 22px ${SANS}`, small: `500 17px ${MONO}`, qname: `600 19px ${SANS}`, qtitle: `400 21px ${SANS}`, emoji: `24px ${SANS}`, head: `500 52px ${SERIF}`, sub: `400 24px ${SANS}`, av: `500 18px ${MONO}` };
+const F = { title: `400 30px ${SERIF}`, sum: `400 23px ${SANS}`, name: `600 22px ${SANS}`, small: `500 17px ${MONO}`, qname: `600 19px ${SANS}`, qtitle: `400 21px ${SANS}`, emoji: `24px ${SANS}`, head: `500 52px ${SERIF}`, sub: `400 24px ${SANS}`, av: `500 18px ${MONO}`, cname: `600 18px ${SANS}`, ctext: `400 21px ${SANS}`, tag: `400 13px ${MONO}` };
+const CX = BX + 46, CW = BW - 46, CIN = 16, CLH = 28;
 const LH = { title: 38, sum: 31 };
 
-interface Block { m: ChatMsg; y: number; h: number; dayY: number | null; nameY: number | null; bubbleY: number; bubbleH: number; bubbleW: number; quote: { topic: string; lines: string[] } | null; title: string[]; sum: string[]; reactY: number | null; }
+interface Block { m: ChatMsg; y: number; h: number; dayY: number | null; nameY: number | null; bubbleY: number; bubbleH: number; bubbleW: number; quote: { topic: string; lines: string[] } | null; title: string[]; sum: string[]; reactY: number | null; comments: { topic: string; lines: string[]; y: number; h: number; w: number }[]; }
 export interface Scene { blocks: Block[]; input: SceneInput; duration: number; }
 
 /** Fonts must be loaded before measuring, or the layout is computed with fallback widths. */
@@ -34,6 +37,10 @@ export function buildScene(ctx: CanvasRenderingContext2D, input: SceneInput): Sc
     b.bubbleW = Math.min(BW, Math.ceil(widest + IN * 2)); if (q) b.bubbleW = BW;
     b.bubbleY = y; b.bubbleH = bh; y += bh;
     if (m.reactions.length) { b.reactY = y + 8; y += 52; }
+    b.comments = (input.comments?.(m.id) ?? []).map(cm => {
+      const lines = wrap(cm.text, CW - CIN * 2, measure(F.ctext), 3); const h = 12 + 24 + lines.length * CLH + 12;
+      const w = Math.min(CW, Math.ceil(Math.max(...lines.map(measure(F.ctext)), measure(F.cname)(input.name(cm.topic)) + 50) + CIN * 2));
+      const c = { topic: cm.topic, lines, y: y + 8, h, w }; y += h + 10; return c; });
     b.y = top; b.h = y - top; blocks.push(b as Block);
   });
   return { blocks, input, duration: durationMs(blocks.length) };
@@ -84,6 +91,15 @@ export function drawFrame(ctx: CanvasRenderingContext2D, s: Scene, t: number) {
       ctx.fillStyle = c.bg; rr(ctx, 0, 0, w, 40, 20); ctx.fill(); ctx.strokeStyle = c.ln; ctx.stroke();
       ctx.font = F.emoji; ctx.fillText(r.emoji, 12, 29); if (label) { ctx.font = F.small; ctx.fillStyle = c.mu; ctx.fillText(label, 46, 27); }
       ctx.restore(); rx += w + 8; }); }
+    // AI comments slide in after the reactions.
+    b.comments.forEach((cm, k) => {
+      const cp = prog(t, at + T_REACT + 450 + k * 300, 320); if (cp <= 0) return; const cy = dy + cm.y + (1 - cp) * 14, col = s.input.color(cm.topic);
+      ctx.globalAlpha = p * cp; avatar(ctx, s, cm.topic, BX, cy, 36);
+      ctx.fillStyle = c.bg; rr(ctx, CX, cy, cm.w, cm.h, [6, 20, 20, 20]); ctx.fill(); ctx.setLineDash([6, 5]); ctx.strokeStyle = c.ln; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = col; ctx.font = F.cname; const nm = s.input.name(cm.topic); ctx.fillText(nm, CX + CIN, cy + 30);
+      const tx = CX + CIN + ctx.measureText(nm).width + 10; ctx.fillStyle = c.sf2; rr(ctx, tx, cy + 15, 30, 20, 5); ctx.fill(); ctx.fillStyle = c.mu; ctx.font = F.tag; ctx.fillText('AI', tx + 7, cy + 30);
+      ctx.fillStyle = c.ink; ctx.font = F.ctext; cm.lines.forEach((l, i) => ctx.fillText(l, CX + CIN, cy + 36 + (i + 1) * CLH - 6));
+    });
     ctx.globalAlpha = 1;
   });
   ctx.restore();
