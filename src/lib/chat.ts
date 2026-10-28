@@ -1,5 +1,9 @@
 // Chat view: notes as a group chat between topics. Replies and reactions come from similarity, labels and to-dos (no AI).
 import { SIM_MIN } from '../similarity';
+import { TOPICS } from './config';
+
+/** Two-letter avatar tag for a topic (EN, SO, LA, RE, CA, SC). */
+export const initials = (topic: string) => (TOPICS.find(t => t.id === topic)?.tag ?? 'scraps').slice(0, 2).toUpperCase();
 
 export interface ChatNote { id: string; topic: string; title: string; sum: string; ts: number; pinned: boolean; labels: string[]; todos: { done: boolean }[]; }
 export interface Reaction { emoji: string; n: number; why: string; }
