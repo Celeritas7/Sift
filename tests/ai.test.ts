@@ -1,4 +1,4 @@
-import { batches, checkComments, checkSummaries, digestInput, isIdList, isWeekOf, MAX_DIGEST_IDS, MAX_TALK_IDS, newestThatFit, summaryInput, TALK_SCHEMA, TALK_SYSTEM, talkInput, type NoteRow } from '../supabase/functions/sift-ai/lib';
+import { batches, checkComments, checkSummaries, digestInput, isIdList, isWeekOf, MAX_DIGEST_IDS, MAX_TALK_IDS, newestThatFit, summaryInput, checkTopicAbout, talkers, talkInput, talkSchema, talkSystem, type NoteRow } from '../supabase/functions/sift-ai/lib';
 let fails = 0;
 const check = (ok: boolean, msg: string, got?: unknown) => { console.log((ok ? 'PASS ' : 'FAIL ') + msg + (ok || got === undefined ? '' : '  got ' + JSON.stringify(got))); if (!ok) fails++; };
 const id = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
@@ -45,7 +45,25 @@ check(cs.length === 2 && cs[0].text === 'Third gripper note this week — still 
 check(!cs.some(c => c.topic === 'career' || c.topic === 'eng' && c.note_id === id(1)), 'never the vault topic, never a topic on its own note');
 const ten = checkComments({ comments: Array.from({ length: 14 }, (_, i) => ({ note_id: id(i), topic: 'scrap', text: 'hi' })) }, Array.from({ length: 14 }, (_, i) => ({ id: id(i), topic: 'eng' })));
 check(ten.length === 10, 'at most 10 comments', ten.length);
-check(!TALK_SYSTEM.includes('career') && JSON.stringify(TALK_SCHEMA).includes('"enum":["eng","soft","lang","refl","scrap"]'), 'Career is not a talker in the prompt or schema');
+check(!talkSystem(talkers()).includes('career') && JSON.stringify(talkSchema(talkers())).includes('"enum":["eng","soft","lang","refl","scrap"]'), 'no custom topics: the five built-ins talk, Career does not');
+// Custom topics join in; Career never does, whatever the client sends.
+const names = { eng: 'Office', career: 'Career & work life', u_trv1: 'Travel', u_art01: 'Art', scrap: 'Scraps' };
+const who = talkers(names, checkTopicAbout({ u_trv1: ' Trips,\n bookings and "places" ', career: 'sneaky', eng: 'not custom', u_bad: 'x'.repeat(141) }));
+check(Object.keys(who).join() === 'eng,soft,lang,refl,scrap,u_trv1,u_art01', 'talkers: built-ins then custom topics', Object.keys(who));
+check(!('career' in who) && !talkSystem(who).includes('career:') && !JSON.stringify(talkSchema(who)).includes('"career"'), 'Career never talks, even when the client names it');
+check(who.u_trv1.startsWith('Travel: ') && who.u_trv1.includes('(Trips, bookings and places)') && who.u_art01.startsWith('Art: ') && !who.u_art01.includes('('), 'custom voice uses its name and description', who);
+check(who.eng.startsWith('Office: precise'), 'a renamed built-in talks under its new name', who.eng);
+check(JSON.stringify(checkTopicAbout({ u_trv1: 'ok', career: 'x', eng: 'x', u_bad: 'x'.repeat(141), u_e: '  ' })) === '{"u_trv1":"ok"}', 'descriptions: custom ids only, ≤140 characters');
+check(JSON.stringify(talkSchema(who)).includes('"enum":["eng","soft","lang","refl","scrap","u_trv1","u_art01"]'), 'schema lets custom topics comment');
+const mixed = [{ id: id(1), topic: 'u_trv1' }, { id: id(2), topic: 'eng' }, { id: id(3), topic: 'u_gone1' }];
+const cm = checkComments({ comments: [
+  { note_id: id(2), topic: 'u_trv1', text: 'Book the hotel near the plant?' },
+  { note_id: id(1), topic: 'u_trv1', text: 'own topic' },
+  { note_id: id(1), topic: 'career', text: 'vault' },
+  { note_id: id(1), topic: 'u_gone1', text: 'not a talker on this request' },
+  { note_id: id(3), topic: 'u_art01', text: 'Sketch it?' },
+] }, mixed, who);
+check(cm.map(c => c.topic + ':' + c.text).join('|') === 'u_trv1:Book the hotel near the plant?|u_art01:Sketch it?', 'custom comments kept; own topic, Career and unknown topics dropped', cm);
 const fit = newestThatFit([note(1, 'a'.repeat(300)), note(2, 'b'.repeat(300)), note(3, 'c'.repeat(300))], 900);
 check(fit.length === 2 && fit[0].id === id(2) && fit[1].body.length === 300, 'over budget: keeps the newest whole notes', fit.map(n => n.id));
 check(isIdList(Array.from({ length: MAX_TALK_IDS }, (_, i) => id(i)), MAX_TALK_IDS) && MAX_TALK_IDS === 40, 'talk takes up to 40 ids');

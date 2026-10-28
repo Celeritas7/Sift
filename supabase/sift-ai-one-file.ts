@@ -85,20 +85,36 @@ export const isIdList = (x: unknown, max = MAX_IDS): x is string[] => Array.isAr
 
 // "Let them talk": topics comment on each other's notes in the Chat view.
 export const MAX_TALK_IDS = 40;
-/** Who may comment. Career is left out: it is the vault topic, so it must never seem to know anything. */
-export const TALKERS: Record<string, string> = {
-  eng: 'Engineering at work: precise and practical, thinks in specs, part numbers and deadlines',
-  soft: 'Building software: a builder who wants to ship, spots the app idea in anything',
-  lang: 'Language learning: curious about words, now and then drops a Japanese or Marathi word with its meaning',
-  refl: 'Reflections: slower and thoughtful, asks what something means for the person',
-  scrap: 'Scraps: quick and playful, the friend who remembers odd fragments',
+/** The built-in voices. Career is left out: it is the vault topic, so it must never seem to know anything. */
+export const TALKERS: Record<string, { name: string; voice: string }> = {
+  eng: { name: 'Engineering at work', voice: 'precise and practical, thinks in specs, part numbers and deadlines' },
+  soft: { name: 'Building software', voice: 'a builder who wants to ship, spots the app idea in anything' },
+  lang: { name: 'Language learning', voice: 'curious about words, now and then drops a Japanese or Marathi word with its meaning' },
+  refl: { name: 'Reflections', voice: 'slower and thoughtful, asks what something means for the person' },
+  scrap: { name: 'Scraps', voice: 'quick and playful, the friend who remembers odd fragments' },
 };
 export interface Comment { note_id: string; topic: string; text: string; }
+/** Topics the person added have ids like u_ab12cd; only those join the built-ins, so Career (or any other id) can never be smuggled in. */
+const CUSTOM_ID = /^u_[a-z0-9]{1,10}$/;
 
-export const TALK_SYSTEM = `Sift shows a person's notes as a group chat: each note is a message from its topic. You write a few short comments in which one topic reacts to another topic's note, to make the chat feel alive and to surface connections the person may have missed.
+/** The person's descriptions of their own topics, by id. Anything malformed is dropped. */
+export function checkTopicAbout(x: unknown): TopicNames {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return {};
+  return Object.fromEntries(Object.entries(x as Record<string, unknown>).filter(([k, v]) => CUSTOM_ID.test(k) && typeof v === 'string' && v.trim() && v.length <= 140).slice(0, 16).map(([k, v]) => [k, (v as string).replace(/\s+/g, ' ').trim().replace(/["<>]/g, '')]));
+}
 
-The topics who can comment, and how each sounds:
-${Object.entries(TALKERS).map(([id, d]) => `- ${id}: ${d}`).join('\n')}
+/** Who may comment on this request, id → how they sound: the built-ins (under the person's names for them) and the person's own topics. Never Career. */
+export function talkers(names: TopicNames = {}, about: TopicNames = {}): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [id, t] of Object.entries(TALKERS)) out[id] = `${names[id] ?? t.name}: ${t.voice}`;
+  for (const [id, name] of Object.entries(names)) if (CUSTOM_ID.test(id)) out[id] = `${name}: the person's own topic${about[id] ? ` (${about[id].replace(/[.\s]+$/, '')})` : ''}; speaks as someone who cares about it, in a voice of its own`;
+  return out;
+}
+
+export const talkSystem = (who: Record<string, string>) => `Sift shows a person's notes as a group chat: each note is a message from its topic. You write a few short comments in which one topic reacts to another topic's note, to make the chat feel alive and to surface connections the person may have missed.
+
+The topics who can comment (by id), and how each sounds:
+${Object.entries(who).map(([id, d]) => `- ${id}: ${d}`).join('\n')}
 
 Rules:
 - Comment only where it adds something: a link to another note in the list (name it by its title), a question worth asking, a nudge about something unfinished, or a light joke grounded in the notes.
@@ -106,13 +122,13 @@ Rules:
 - Each comment is one or two sentences, at most 25 words, in English, warm and specific. No advice lectures, no hashtags, no emoji spam (one at most).
 - Spread comments across different notes and topics. Write about one comment per four notes, at most 10.`;
 
-export const TALK_SCHEMA = {
+export const talkSchema = (who: Record<string, string>) => ({
   type: 'object',
   properties: { comments: { type: 'array', items: { type: 'object',
-    properties: { note_id: { type: 'string' }, topic: { type: 'string', enum: Object.keys(TALKERS) }, text: { type: 'string' } },
+    properties: { note_id: { type: 'string' }, topic: { type: 'string', enum: Object.keys(who) }, text: { type: 'string' } },
     required: ['note_id', 'topic', 'text'], additionalProperties: false } } },
   required: ['comments'], additionalProperties: false,
-} as const;
+});
 
 export const talkInput = (notes: NoteRow[], names: TopicNames = {}) => 'The chat, oldest first:\n\n' +
   notes.map(n => `<note id="${n.id}" ${topicAttr(n.topic, names)} date="${n.created_at.slice(0, 10)}">\n<title>${n.title}</title>\n<body>\n${n.body}\n</body>\n</note>`).join('\n\n');
@@ -125,13 +141,13 @@ export function newestThatFit<T extends { title: string; body: string }>(notes: 
 }
 
 /** Valid comments only: on a note that was sent, by a known talker other than the note's own topic, short, one per note+topic, at most 10. */
-export function checkComments(raw: unknown, notes: { id: string; topic: string }[]): Comment[] {
+export function checkComments(raw: unknown, notes: { id: string; topic: string }[], who: Record<string, string> = talkers()): Comment[] {
   const list = (raw as { comments?: unknown })?.comments; if (!Array.isArray(list)) return [];
   const topicOf = new Map(notes.map(n => [n.id, n.topic])); const seen = new Set<string>(); const out: Comment[] = [];
   for (const c of list as Record<string, unknown>[]) {
     const note_id = typeof c?.note_id === 'string' ? c.note_id : '', topic = typeof c?.topic === 'string' ? c.topic : '';
     const text = typeof c?.text === 'string' ? c.text.replace(/\s+/g, ' ').trim() : '';
-    if (!topicOf.has(note_id) || !(topic in TALKERS) || topicOf.get(note_id) === topic || !text || text.length > 220 || seen.has(note_id + topic)) continue;
+    if (!topicOf.has(note_id) || !Object.hasOwn(who, topic) || topic === 'career' || topicOf.get(note_id) === topic || !text || text.length > 220 || seen.has(note_id + topic)) continue;
     seen.add(note_id + topic); out.push({ note_id, topic, text }); if (out.length === 10) break;
   }
   return out;
@@ -167,7 +183,7 @@ Deno.serve(async req => {
   const role = await sb.from('authentication_mode_user_roles').select('role').eq('auth_user_id', user.id).maybeSingle();
   if (!role.data) return json({ error: 'Your account has no Sift role.' }, 403);
 
-  let body: { action?: string; ids?: unknown; week_of?: unknown; topics?: unknown };
+  let body: { action?: string; ids?: unknown; week_of?: unknown; topics?: unknown; topic_about?: unknown };
   try { body = await req.json(); } catch { return json({ error: 'Bad JSON' }, 400); }
   const max = body.action === 'digest' ? MAX_DIGEST_IDS : body.action === 'talk' ? MAX_TALK_IDS : MAX_IDS;
   if (!isIdList(body.ids, max)) return json({ error: `ids: 1 to ${max} note ids` }, 400);
@@ -197,8 +213,9 @@ Deno.serve(async req => {
       // Career is the vault topic: never sent (the vault filter above already drops it, this is belt and braces).
       const chat = newestThatFit(notes.filter(n => n.topic !== 'career'));
       if (chat.length < 2) return json({ error: 'Need at least two notes for the topics to talk about.' }, 400);
-      const text = await ask(TALK_SYSTEM, talkInput(chat, names), 'medium', TALK_SCHEMA);
-      return json({ comments: checkComments(JSON.parse(text), chat), skipped });
+      const who = talkers(names, checkTopicAbout(body.topic_about)); // the built-ins and the person's own topics, never Career
+      const text = await ask(talkSystem(who), talkInput(chat, names), 'medium', talkSchema(who));
+      return json({ comments: checkComments(JSON.parse(text), chat, who), skipped });
     }
     return json({ error: 'action: summarize, digest or talk' }, 400);
   } catch (e) {
