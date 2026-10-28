@@ -1,12 +1,14 @@
 // sift-ai: note summaries, weekly digests and Chat comments ("Let them talk") with Claude. Deploy: supabase functions deploy sift-ai
-// Secrets: ANTHROPIC_API_KEY (supabase secrets set). SUPABASE_URL / SUPABASE_ANON_KEY are provided by Supabase.
+// Secrets: SIFT_ANTHROPIC_API_KEY (Sift's own key), else ANTHROPIC_API_KEY (supabase secrets set). SUPABASE_URL / SUPABASE_ANON_KEY are provided by Supabase.
 // It reads notes as the signed-in user (row-level security applies), never sends vault notes, and writes nothing:
 // the app saves the results through its normal sync.
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { batches, checkComments, checkSummaries, checkTopicNames, DIGEST_SYSTEM, digestInput, isIdList, isWeekOf, MAX_DIGEST_IDS, MAX_IDS, MAX_TALK_IDS, MODEL, newestThatFit, type NoteRow, SUMMARY_SCHEMA, SUMMARY_SYSTEM, summaryInput, type Summary, TALK_SCHEMA, TALK_SYSTEM, talkInput } from './lib.ts';
 
-const anthropic = new Anthropic(); // ANTHROPIC_API_KEY from the function's secrets
+// Secrets are shared by every function in the project: Sift prefers its own key, so other apps' ANTHROPIC_API_KEY is left alone.
+const apiKey = Deno.env.get('SIFT_ANTHROPIC_API_KEY') || Deno.env.get('ANTHROPIC_API_KEY');
+const anthropic = new Anthropic({ apiKey });
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
@@ -43,6 +45,7 @@ Deno.serve(async req => {
   const names = checkTopicNames(body.topics); // the user's own topic names, for the prompts
   const found = new Set(notes.map(n => n.id)); const skipped = body.ids.filter(id => !found.has(id)); // vault, deleted or not synced yet
 
+  if (!apiKey) return json({ error: 'No Anthropic API key: add the secret SIFT_ANTHROPIC_API_KEY in Supabase (Edge Functions → Secrets).' }, 500);
   try {
     if (body.action === 'summarize') {
       const out: Summary[] = [];
@@ -67,7 +70,7 @@ Deno.serve(async req => {
     return json({ error: 'action: summarize, digest or talk' }, 400);
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return json({ error: 'Claude is busy. Try again in a minute.' }, 429);
-    if (e instanceof Anthropic.AuthenticationError) return json({ error: 'The Anthropic API key is missing or wrong (supabase secrets set ANTHROPIC_API_KEY=…).' }, 500);
+    if (e instanceof Anthropic.AuthenticationError) return json({ error: 'The Anthropic API key is wrong or expired. Check the SIFT_ANTHROPIC_API_KEY secret in Supabase.' }, 500);
     if (e instanceof Anthropic.APIError) return json({ error: `Claude API error ${e.status}: ${e.message}` }, 502);
     return json({ error: (e as Error).message }, 500);
   }
