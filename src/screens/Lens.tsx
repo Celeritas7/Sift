@@ -1,9 +1,10 @@
 import { useStore } from '../state/store';
 import { useIsMobile, useNotes, usePalette } from '../state/derived';
 import { useWeeks } from '../state/counts';
-import { MONO, NO_AI, SERIF, TOPICS } from '../lib/config';
+import { MONO, SERIF, TOPICS } from '../lib/config';
 import { plural } from '../lib/format';
-import { Eyebrow, H1, Lede, inkBtn } from '../components/ui';
+import { Eyebrow, H1, Lede } from '../components/ui';
+import { DigestButton } from '../components/DigestButton';
 
 export function Lens() {
   const st = useStore(); const { c } = usePalette(); const mobile = useIsMobile(); const { active } = useNotes(); const { weeks, current } = useWeeks();
@@ -54,8 +55,7 @@ export function Lens() {
         <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--mu)' }}>{current ? 'Week of ' + current.label : 'This week'} · {plural(current?.notes.length ?? 0, 'note')}</div>
         <p style={{ margin: 0, fontFamily: SERIF, fontSize: 21, fontWeight: 300, lineHeight: 1.4, whiteSpace: 'pre-line', textWrap: 'pretty' }}>{current?.digest || 'No digest for this week yet.'}</p>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 'auto' }}>
-          <button disabled title={NO_AI} style={{ ...inkBtn, opacity: .45 }}>Write digest</button>
-          <span style={{ fontSize: 12, color: 'var(--mu)' }}>{NO_AI}</span>
+          <DigestButton week={current} mobile={mobile} />
         </div>
       </div>
     </section>

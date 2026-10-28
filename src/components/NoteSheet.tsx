@@ -6,6 +6,7 @@ import { fmtLong } from '../lib/format';
 import { saveNoteEdit } from '../lib/edit';
 import { caretHandlers } from '../lib/keyboard';
 import { setBeforeLock } from '../lib/vault';
+import { AI_READY } from '../lib/ai';
 import { useImageUrl } from '../hooks/useImageUrl';
 import { NoteChips } from '../screens/Stream';
 import { Check, ghostBtn, inkBtn } from './ui';
@@ -160,10 +161,13 @@ export function NoteSheet() {
         </div>
         {!slim && <section style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px', borderRadius: 14, background: 'var(--bg)', borderLeft: '2px solid var(--ac)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontFamily: MONO, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--mu)' }}>
-            <span>Summary</span><span style={{ textTransform: 'none', letterSpacing: 0 }}>{n.summary ? 'saved at import' : ''}</span>
-            <button disabled title={NO_AI} style={{ marginLeft: 'auto', padding: '5px 12px', border: 0, borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontFamily: SANS, fontSize: 12, textTransform: 'none', letterSpacing: 0, opacity: .45 }}>Summarise</button>
+            <span>Summary</span>
+            {(() => { const busy = !!st.aiBusy['note:' + n.id], can = AI_READY && !n.vault && !busy;
+              return <button disabled={!can} onClick={() => void st.summarizeNotes([n.id])} title={!AI_READY ? NO_AI : n.vault ? 'Vault notes are never sent to AI' : 'Summary by Claude'}
+                style={{ marginLeft: 'auto', padding: mobile ? '0 14px' : '5px 12px', minHeight: mobile ? 36 : undefined, border: 0, borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', fontFamily: SANS, fontSize: 12, textTransform: 'none', letterSpacing: 0, opacity: can || busy ? 1 : .45 }}>
+                {busy ? 'Summarising…' : n.summary ? 'Redo' : 'Summarise'}</button>; })()}
           </div>
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, whiteSpace: 'pre-line', color: n.summary ? 'var(--ink)' : 'var(--mu)' }}>{n.summary || NO_AI + '.'}</p>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, whiteSpace: 'pre-line', color: n.summary ? 'var(--ink)' : 'var(--mu)' }}>{n.summary || (!AI_READY ? NO_AI + '.' : n.vault ? 'Vault notes are never sent to AI.' : 'No summary yet.')}</p>
           {n.summary_orig && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.75, color: 'var(--mu)', borderTop: '1px solid var(--ln)', paddingTop: 10 }}>{n.summary_orig}</p>}
           {n.todoList.length > 0 && <ul style={{ margin: 0, padding: '10px 0 0', listStyle: 'none', borderTop: '1px solid var(--ln)', display: 'flex', flexDirection: 'column', gap: 6 }}>
             {n.todoList.map(t => <li key={t.id} onClick={() => void st.toggleTodo(t.id)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontSize: 14 }}>

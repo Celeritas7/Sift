@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { useStore } from '../state/store';
 import { useAmbientPool, useConflicts, useIsMobile, useNotes, useOwnHighlights, usePalette, type NoteV } from '../state/derived';
 import { useWeeks, useWfStats } from '../state/counts';
-import { DEFAULT_STREAM, MONO, NO_AI, SERIF, TOPICS, topicColor } from '../lib/config';
+import { DEFAULT_STREAM, MONO, SERIF, TOPICS, topicColor } from '../lib/config';
 import { ago, DOW, fmtShort, MONTHS, plural } from '../lib/format';
 import { focusComposer } from '../state/focus';
 import { Chip, Eyebrow, inkBtn, pill, Switch } from '../components/ui';
 import { SwipeRow } from '../components/SwipeRow';
+import { DigestButton } from '../components/DigestButton';
 import { segStyle } from '../components/CollageText';
 import { hl, marker } from '../lib/collage';
 import { pickExcerpt, type Excerpt } from '../lib/parse';
@@ -52,14 +53,13 @@ function Hero() {
         <span>{wf.line}</span>
       </button>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button disabled title={NO_AI} style={{ ...inkBtn, opacity: .45 }}>Write digest</button>
         <div className="noscroll" style={{ display: 'flex', gap: 2, overflowX: 'auto', padding: 2 }}>
           {weeks.map(w => { const on = current?.id === w.id; return <button key={w.id} className="h-ac" onClick={() => st.set({ week: w.id })} title={'Week of ' + w.label}
             style={{ width: 26, height: 26, borderRadius: '50%', border: `1px solid ${on ? c.ink : c.ln}`, background: on ? c.ink : 'transparent', display: 'grid', placeItems: 'center', flex: 'none' }}>
             <span style={{ width: w.digest ? 8 : 4, height: w.digest ? 8 : 4, borderRadius: '50%', background: on ? c.bg : w.digest ? c.ac : c.mu, display: 'inline-block', transition: 'all .2s' }} />
           </button>; })}
         </div>
-        <span style={{ fontSize: 12, color: 'var(--mu)' }}>{NO_AI}</span>
+        <DigestButton week={current} mobile={mobile} />
       </div>
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>

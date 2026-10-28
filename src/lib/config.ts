@@ -28,5 +28,6 @@ export const DEFAULT_STREAM: StreamSettings = { excerpt: true, group: 'month' };
 export const WF_BOARD = 'my_week';
 export const BASE_CTX = ['@train', '@desk', '@deep-work', '@keyboard', '@phone-only', '@needs-claude-code', '@home', '@office'];
 export const LINK_HUES = [300, 230, 160, 55, 20];
-export const NO_AI = 'Summaries arrive in a later version';
+/** Shown where AI would be, when Sift runs local-only (AI goes through the Supabase function). */
+export const NO_AI = 'AI summaries need Sift cloud sync';
 export const MAP_MAX_NODES = 150;

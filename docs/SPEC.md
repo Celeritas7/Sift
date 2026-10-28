@@ -125,6 +125,11 @@ Spacing: 4/6/8/10/12/14/16/18/20/22/28/32/36/44/56.
 - Vault notes appear only while unlocked. Logic: `src/lib/chat.ts`; screen: `src/screens/Chat.tsx`.
 - **Make video** (button on Chat): records the latest 10 / 20 / 40 notes as a 720×1280 (9:16) video in the browser — canvas animation (messages pop in, the stack scrolls, reactions pop after 0.75 s; 1.5 s per message, ≈33 s for 20) captured with MediaRecorder at 30 fps. Format: H.264 MP4 when the browser can, else MP4 with another codec, else WebM. Then Share (Web Share with the file) or Save. Nothing is uploaded; vault notes are always left out, even when unlocked. Recording stops if Sift goes to the background. Code: `src/lib/video.ts` (timing, wrap, format), `src/lib/videoRender.ts` (drawing, recording), `src/components/VideoModal.tsx`.
 
+### AI summaries and digests
+- **Note summary**: "Summarise" / "Redo" in the note sheet → one English sentence (≤ 25 words) in `summary`, plus the same in the note's language in `summary_orig` when it isn't English. Stream rows, search and Chat use `summary` when present. `/summarize` summarises every non-vault note without one, 20 per request, with a progress banner and Stop.
+- **Weekly digest**: "Write digest" / "Rewrite digest" (Stream hero, Lens) → 2–4 sentences (≤ 80 words) addressed to "you", saved as `sift_digests` with `generated_by: 'ai'`. "Write one automatically every Monday" writes last week's digest on the first open after the week ends (once per device).
+- Vault notes are never sent. Local-only mode shows the buttons disabled ("AI summaries need Sift cloud sync"). Server: `supabase/functions/sift-ai` (Claude API, key in Supabase secrets); client: `src/lib/ai.ts`. Setup: SETUP.md step 7.
+
 ## Phases (agreed)
 1. **Done in prototype** — composer, Map zoom/drag/topic highlight.
 2. Note view: inline edit + save, add/remove labels.
