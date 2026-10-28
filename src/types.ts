@@ -49,4 +49,5 @@ export interface Profile { name: string | null; email: string | null; role: 'adm
 export type WfMutation =
   | { type: 'set_done'; id: string; done: boolean }
   | { type: 'add'; subtasks: WfSubtask[] }
-  | { type: 'remove_src'; prefix: string };
+  | { type: 'remove_src'; prefix: string }
+  | { type: 'delete'; id: string };

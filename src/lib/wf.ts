@@ -15,6 +15,8 @@ export function applyWfMutation(p: WfItemPayload, mut: WfMutation): WfItemPayloa
   const now = Date.now(); const subs = p.subtasks || [];
   if (mut.type === 'set_done') return { ...p, subtasks: subs.map(s => (s.id === mut.id ? { ...s, done: mut.done, u: now } : s)) };
   if (mut.type === 'add') return { ...p, subtasks: [...subs, ...mut.subtasks.map(s => ({ ...s, u: now }))] };
+  // Weekly Focus deletes by tombstone (del: true), so its own merge never brings the task back.
+  if (mut.type === 'delete') return { ...p, subtasks: subs.map(s => (s.id === mut.id ? { ...s, del: true, u: now } : s)) };
   return { ...p, subtasks: subs.filter(s => !(s.src || '').startsWith(mut.prefix)) };
 }
 

@@ -4,7 +4,7 @@ import { db, getMeta, openDb, setMeta, type QueueOp, type SyncTable } from '../l
 import { cloud, LOCAL_USER, supabase } from '../lib/supabase';
 import { enqueue, fetchAll, fetchWf, flush, pendingCount, setSyncHandlers, subscribe, wireBackgroundFlush } from '../lib/sync';
 import { applyWfMutation, isItem, newSubtask } from '../lib/wf';
-import { nowIso, uid } from '../lib/format';
+import { nowIso, shortId, uid } from '../lib/format';
 import { sha256 } from '../keepImport';
 import { WF_BOARD } from '../lib/config';
 import { DEFAULT_COLLAGE } from '../lib/collage';
@@ -69,6 +69,7 @@ interface State {
   sendTodo(todoId: string, itemKey: string): Promise<void>;
   toggleWfSubtask(itemKey: string, subId: string): Promise<void>;
   mutateWf(itemKey: string, mut: WfMutation): Promise<void>;
+  moveWfSubtask(from: string, subId: string, to: string): Promise<void>;
   setLayout(kind: LayoutKind, noteId: string, x: number, y: number): Promise<void>;
   /** Forget every saved position of one layout (the other layout is untouched). */
   resetLayout(kind: LayoutKind): Promise<void>;
@@ -135,7 +136,7 @@ export const useStore = create<State>()((set, get) => {
     // WF → Sift: subtasks created from Sift carry src 'sift:<noteId>#<i>'; mirror their done state onto sift_todos.
     const todos = Object.values(get().todos); const changed: Todo[] = []; const next = { ...get().todos };
     e.payload.subtasks.forEach(s => {
-      if (!(s.src || '').startsWith('sift:')) return; const t = todos.find(x => x.wf_subtask_id === s.id); if (!t || t.done === s.done) return;
+      if (s.del || !(s.src || '').startsWith('sift:')) return; const t = todos.find(x => x.wf_subtask_id === s.id); if (!t || t.done === s.done) return;
       if (t.updated_at && Date.parse(t.updated_at) > s.u) return;
       const nt = { ...t, done: s.done, updated_at: nowIso() }; next[t.id] = nt; changed.push(nt);
     });
@@ -319,6 +320,17 @@ export const useStore = create<State>()((set, get) => {
       const e = get().wf[itemKey]; if (!e || !isItem(e)) return; const s = e.payload.subtasks.find(x => x.id === subId); if (!s) return;
       const linked = Object.values(get().todos).find(t => t.wf_subtask_id === subId);
       if (linked) await get().toggleTodo(linked.id); else await get().mutateWf(itemKey, { type: 'set_done', id: subId, done: !s.done });
+    },
+
+    async moveWfSubtask(from, subId, to) {
+      const a = get().wf[from], b = get().wf[to]; if (from === to || !a || !b || !isItem(a) || !isItem(b)) return;
+      const s = a.payload.subtasks.find(x => x.id === subId && !x.del); if (!s) return;
+      // A fresh id in the new item, then a tombstone in the old one: add first, so a failure leaves a duplicate, never a loss.
+      const copy = { ...s, id: shortId() };
+      await get().mutateWf(to, { type: 'add', subtasks: [copy] });
+      await get().mutateWf(from, { type: 'delete', id: subId });
+      const t = Object.values(get().todos).find(x => x.wf_subtask_id === subId);
+      if (t) { const nt: Todo = { ...t, wf_item_key: to, wf_subtask_id: copy.id, updated_at: nowIso() }; set({ todos: { ...get().todos, [t.id]: nt } }); await db().todos.put(nt); await persist([upsertOp('sift_todos', nt)]); }
     },
 
     async mutateWf(itemKey, mut) {

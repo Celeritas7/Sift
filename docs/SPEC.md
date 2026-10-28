@@ -122,7 +122,7 @@ Spacing: 4/6/8/10/12/14/16/18/20/22/28/32/36/44/56.
 1. **Done in prototype** — composer, Map zoom/drag/topic highlight.
 2. Note view: inline edit + save, add/remove labels.
 3. Stream: excerpt line under summary, optional group-by-topic.
-4. Week: drag task between items, show notes mentioning a task; Vault auto-relock 2 min (done); Mobile swipe (left archive, right pin) (done); header tidy.
+4. Week: drag task between items (done), show notes mentioning a task (done); Vault auto-relock 2 min (done); Mobile swipe (left archive, right pin) (done); header tidy.
 
 ## Files in this package
 - [`docs/prototype/Sift v3.dc.html`](prototype/Sift%20v3.dc.html) — the prototype (template + logic). Open it in a browser; needs `support.js` and `sift-data.js` beside it (they are, in `docs/prototype/`).
