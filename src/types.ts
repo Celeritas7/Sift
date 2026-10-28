@@ -40,6 +40,8 @@ export interface CollageSettings {
   minWords: number;
 }
 export type HighlightColor = 'yellow' | 'pink' | 'green' | 'blue';
+/** A comment by Claude in Chat ("Let them talk"): `topic` reacts to the note. Table sift_chat_comments. */
+export interface ChatComment { id: string; user_id: string; note_id: string; topic: string; text: string; created_at: string; updated_at: string; }
 export interface Highlight { id: string; user_id: string; note_id: string; quote: string; start: number; color: HighlightColor; created_at: string; updated_at: string; }
 export interface ConflictDismissal { user_id: string; a: string; b: string; }
 export interface ImportFile { user_id: string; file_name: string; content_hash: string; note_id: string | null; imported_at: string; }
