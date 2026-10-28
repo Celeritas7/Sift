@@ -6,7 +6,7 @@ import { enqueue, fetchAll, fetchWf, flush, pendingCount, setSyncHandlers, subsc
 import { applyWfMutation, isItem, newSubtask } from '../lib/wf';
 import { nowIso, shortId, uid } from '../lib/format';
 import { sha256 } from '../keepImport';
-import { WF_BOARD } from '../lib/config';
+import { applyTopics, BUILTIN_IDS, TOPICS, WF_BOARD, type TopicSetting } from '../lib/config';
 import { DEFAULT_COLLAGE } from '../lib/collage';
 import { anchor, anchorAll } from '../lib/highlights';
 import { markLocked, markUnlocked, restoreUnlocked, runBeforeLock } from '../lib/vault';
@@ -47,6 +47,8 @@ interface State {
   wf: Record<string, WfEntry>; wfSyncedAt: number; dismissed: Record<string, true>; digests: Record<string, Digest>; settings: Settings;
   pending: number; error: string | null; hasPin: boolean; pinIsDemo: boolean;
   /** AI work in flight: keys like 'note:<id>' / 'digest:<week>', and the progress of a bulk summary run. */
+  /** The Topics editor is open. */
+  topicsOpen: boolean;
   aiBusy: Record<string, true>; aiBulk: { done: number; total: number; stop: boolean } | null;
   /** Chat comments by Claude ("Let them talk"), kept on this device only. */
   talk: Comment[];
@@ -80,6 +82,8 @@ interface State {
   /** New comments for these notes (replacing their old ones). */
   letThemTalk(ids: string[]): Promise<number>;
   clearTalk(): Promise<void>;
+  /** Save the topic list; notes in removed topics move to Scraps. */
+  saveTopics(list: TopicSetting[]): Promise<number>;
   moveWfSubtask(from: string, subId: string, to: string): Promise<void>;
   setLayout(kind: LayoutKind, noteId: string, x: number, y: number): Promise<void>;
   /** Forget every saved position of one layout (the other layout is untouched). */
@@ -197,7 +201,7 @@ export const useStore = create<State>()((set, get) => {
   return {
     phase: 'boot', userId: '', profile: null,
     notes: {}, todos: {}, highlights: {}, layout: NO_LAYOUT(), wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
-    pending: 0, error: null, hasPin: true, pinIsDemo: false, aiBusy: {}, aiBulk: null, talk: [],
+    pending: 0, error: null, hasPin: true, pinIsDemo: false, aiBusy: {}, aiBulk: null, talk: [], topicsOpen: false,
     view: 'stream', filter: 'all', query: '', selId: null, unlocked: false, collage: DEFAULT_COLLAGE, pin: { open: false, mode: 'enter', after: null }, toast: null, importOpen: false,
     ambient: false, opened: {}, sessionNew: {}, composerFocused: false, sendFor: null, sendItem: null, week: null, map: { zoom: 1, pan: { x: 0, y: 0 }, topic: null, hover: null, placed: null, dragging: null },
 
@@ -373,6 +377,13 @@ export const useStore = create<State>()((set, get) => {
       } catch (e) { set({ error: (e as Error).message }); return 0; }
       finally { const { talk: _, ...rest } = get().aiBusy; set({ aiBusy: rest }); }
     },
+    async saveTopics(list) {
+      // Only topics that existed and were removed: notes with an unknown topic id are left alone.
+      const keep = new Set(list.map(t => t.id)), gone = new Set(TOPICS.map(t => t.id as string).filter(id => !keep.has(id) && !BUILTIN_IDS.has(id))); let moved = 0;
+      await get().setSettings({ topics: list });
+      for (const n of Object.values(get().notes)) if (!n.deleted_at && gone.has(n.topic)) { await get().updateNote(n.id, { topic: 'scrap' }); moved++; }
+      return moved;
+    },
     async clearTalk() { set({ talk: [] }); await setMeta('talk', []); },
 
     async moveWfSubtask(from, subId, to) {
@@ -459,5 +470,8 @@ export const useStore = create<State>()((set, get) => {
     async refreshLinks() { if (supabase && navigator.onLine) { await flush(); await supabase.rpc('sift_refresh_links'); } },
   };
 });
+
+// Keep the live topic list in step with settings. Registered before any component subscribes, so renders see the new list.
+useStore.subscribe((s, prev) => { if (s.settings.topics !== prev.settings.topics) applyTopics(s.settings.topics); });
 
 export const LOCAL = LOCAL_USER;

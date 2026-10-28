@@ -12,8 +12,9 @@ export function Lens() {
   const setFilter = (f: string) => st.set({ filter: f, view: 'stream', selId: null, query: '' });
   return <>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <H1>What your notes are about</H1>
-      <Lede>Six threads across your notes and {plural(langs.size, 'language')}. Tap one to filter the stream.</Lede>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><H1>What your notes are about</H1>
+        <button onClick={() => st.set({ topicsOpen: true })} className="h-acc" style={{ padding: '6px 14px', minHeight: mobile ? 44 : undefined, border: '1px solid var(--ln)', borderRadius: 999, background: 'transparent', fontSize: 13 }}>Edit topics</button></div>
+      <Lede>{plural(TOPICS.length, 'thread')} across your notes and {plural(langs.size, 'language')}. Tap one to filter the stream.</Lede>
     </div>
     <section style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(4,minmax(0,1fr))', gap: 12 }}>
       {TOPICS.map((t, i) => {

@@ -3,7 +3,7 @@ import { SIM_MIN } from '../similarity';
 import { TOPICS } from './config';
 
 /** Two-letter avatar tag for a topic (EN, SO, LA, RE, CA, SC). */
-export const initials = (topic: string) => (TOPICS.find(t => t.id === topic)?.tag ?? 'scraps').slice(0, 2).toUpperCase();
+export const initials = (topic: string) => { const t = TOPICS.find(x => x.id === topic); if (!t) return 'SC'; return (t.custom ? Array.from(t.name.replace(/\s+/g, '')).slice(0, 2).join('') : t.tag.slice(0, 2)).toUpperCase(); };
 
 export interface ChatNote { id: string; topic: string; title: string; sum: string; ts: number; pinned: boolean; labels: string[]; todos: { done: boolean }[]; }
 export interface Reaction { emoji: string; n: number; why: string; }
