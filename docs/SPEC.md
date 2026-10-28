@@ -32,7 +32,7 @@ Desktop frame: max-width 1240px centred; header sticky, blurred (`backdrop-filte
 ### 1. Header (all screens)
 - Wordmark: 9px accent dot + "Sift" (Newsreader 22/500, letter-spacing −.02em). Click → Stream.
 - Search pill (max 440px, 999px radius, 1px border): "/" mono hint, input; typing shows **note hits** dropdown (6 max: colour dot, title, summary, date; Enter opens first; footer "vault notes are not searched" when locked); typing "/" shows **commands** (/new /week /map /ambient /vault /todos /import /archive /dark).
-- Nav pill (desktop): Stream · Week [open WF count] · Map · Lens · To-dos [open count] · Conflicts [1]. Active = ink bg, bg-coloured text.
+- Nav pill (desktop): Stream · Week [open WF count] · Map · Lens · To-dos [open count] · Conflicts [1]. Active = ink bg, bg-coloured text. From 431 to 1099px it sits on its own row under the search and scrolls sideways if needed; below 600px the vault label hides and the search placeholder shortens. On narrow screens the search dropdown spans the header.
 - Right: **Vault** button (padlock glyph, shackle lifts when open; label VAULT/OPEN, mono 10px), **Ambient** button (ring glyph), **Theme** toggle (dot).
 
 ### 2. Stream (home)
@@ -122,7 +122,7 @@ Spacing: 4/6/8/10/12/14/16/18/20/22/28/32/36/44/56.
 1. **Done in prototype** — composer, Map zoom/drag/topic highlight.
 2. Note view: inline edit + save, add/remove labels.
 3. Stream: excerpt line under summary, optional group-by-topic.
-4. Week: drag task between items (done), show notes mentioning a task (done); Vault auto-relock 2 min (done); Mobile swipe (left archive, right pin) (done); header tidy.
+4. Week: drag task between items (done), show notes mentioning a task (done); Vault auto-relock 2 min (done); Mobile swipe (left archive, right pin) (done); header tidy (done).
 
 ## Files in this package
 - [`docs/prototype/Sift v3.dc.html`](prototype/Sift%20v3.dc.html) — the prototype (template + logic). Open it in a browser; needs `support.js` and `sift-data.js` beside it (they are, in `docs/prototype/`).

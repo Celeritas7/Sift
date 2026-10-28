@@ -1,5 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { useStore, type View } from '../state/store';
-import { useIsMobile, useNotes, usePalette } from '../state/derived';
+import { useIsMobile, useMedia, useNotes, usePalette } from '../state/derived';
 import { useCounts } from '../state/counts';
 import { MONO, SERIF, topicColor } from '../lib/config';
 import { fmtShort } from '../lib/format';
@@ -39,23 +40,29 @@ export function useCommands() {
 
 export function Header() {
   const st = useStore(); const { c, dark } = usePalette(); const mobile = useIsMobile();
+  // Between phone and wide desktop the nav pill doesn't fit beside the search: it takes its own row and scrolls sideways if needed.
+  const twoRow = useMedia('(min-width: 431px) and (max-width: 1099px)'), compact = useMedia('(max-width: 599px)');
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => { if (twoRow) navRef.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [st.view, twoRow]);
   const { active, lockedCount } = useNotes(); const nav = useNavItems(); const cmds = useCommands();
   const isCmd = st.query.startsWith('/'), q = isCmd ? '' : st.query.trim().toLowerCase();
   const hits = q ? active.filter(n => !n.hidden && (n.title + ' ' + n.body + ' ' + n.sum + ' ' + (n.summary_orig || '')).toLowerCase().includes(q)).slice(0, 6) : [];
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { if (isCmd && cmds[0]) cmds[0].run(); else if (hits[0]) st.openNote(hits[0].id); } };
-  const pop: React.CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: 6, boxShadow: '0 18px 50px rgba(0,0,0,.14)', display: 'flex', flexDirection: 'column', animation: 'siftin .18s ease-out', zIndex: 2 };
+  // On narrow screens the search box is too thin for its dropdown, so the dropdown spans the header instead.
+  const wide = !(mobile || compact);
+  const pop: React.CSSProperties = { position: 'absolute', top: wide ? 'calc(100% + 6px)' : 'calc(100% - 2px)', left: wide ? 0 : 14, right: wide ? 0 : 14, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: 6, boxShadow: '0 18px 50px rgba(0,0,0,.14)', display: 'flex', flexDirection: 'column', animation: 'siftin .18s ease-out', zIndex: 2 };
   const round: React.CSSProperties = { width: 34, height: 34, borderRadius: '50%', border: '1px solid var(--ln)', background: 'var(--sf)', display: 'grid', placeItems: 'center', flex: 'none' };
 
-  return <header style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', alignItems: 'center', gap: mobile ? 8 : 18, padding: mobile ? '12px 14px' : '16px 32px',
+  return <header style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', flexWrap: twoRow ? 'wrap' : 'nowrap', alignItems: 'center', gap: mobile ? 8 : twoRow ? '12px 14px' : 18, padding: mobile ? '12px 14px' : twoRow ? '14px 24px 10px' : '16px 32px',
     background: 'color-mix(in srgb, var(--bg) 86%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-    <button onClick={() => st.go('stream')} style={{ border: 0, background: 'transparent', padding: 0, fontFamily: SERIF, fontSize: 22, fontWeight: 500, letterSpacing: '-.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <button onClick={() => st.go('stream')} style={{ flex: 'none', border: 0, background: 'transparent', padding: 0, fontFamily: SERIF, fontSize: 22, fontWeight: 500, letterSpacing: '-.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
       <img src={import.meta.env.BASE_URL + 'icon.svg'} alt="" width={26} height={26} style={{ display: 'block', borderRadius: 6 }} />Sift
     </button>
     <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-      <div style={{ position: 'relative', width: '100%', maxWidth: 440 }}>
+      <div style={{ position: wide ? 'relative' : 'static', width: '100%', maxWidth: 440 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 999, background: 'var(--sf)', border: '1px solid var(--ln)' }}>
           <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--mu)' }}>/</span>
-          <input value={st.query} onChange={e => st.set({ query: e.target.value })} onKeyDown={onKey} placeholder={mobile ? 'Search or /' : 'Search, or / for commands'} aria-label="Search notes"
+          <input value={st.query} onChange={e => st.set({ query: e.target.value })} onKeyDown={onKey} placeholder={mobile || compact ? 'Search or /' : 'Search, or / for commands'} aria-label="Search notes"
             style={{ flex: 1, minWidth: 0, border: 0, background: 'transparent', outline: 'none', fontSize: 14 }} />
           {st.query && <button onClick={() => st.set({ query: '' })} aria-label="Clear search" style={{ border: 0, background: 'transparent', color: 'var(--mu)', padding: '0 2px', lineHeight: 1 }}>×</button>}
         </div>
@@ -77,20 +84,20 @@ export function Header() {
         </div>}
       </div>
     </div>
-    {!mobile && <nav style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--sf)', border: '1px solid var(--ln)' }}>
-      {nav.map(n => { const on = st.view === n.id; return <button key={n.id} onClick={() => st.go(n.id)} style={{ padding: '6px 11px', border: 0, borderRadius: 999, background: on ? c.ink : 'transparent', color: on ? c.bg : c.ink, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, transition: 'background .2s' }}>
+    {!mobile && <nav ref={navRef} className="noscroll" style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--sf)', border: '1px solid var(--ln)', ...(twoRow ? { order: 3, flex: '1 0 100%', overflowX: 'auto' } : { flex: 'none' }) }}>
+      {nav.map(n => { const on = st.view === n.id; return <button key={n.id} onClick={() => st.go(n.id)} aria-current={on ? 'page' : undefined} style={{ flex: twoRow ? '1 0 auto' : 'none', justifyContent: 'center', whiteSpace: 'nowrap', padding: '6px 11px', border: 0, borderRadius: 999, background: on ? c.ink : 'transparent', color: on ? c.bg : c.ink, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, transition: 'background .2s' }}>
         <span>{n.label}</span>
         {n.count > 0 && <span style={{ fontFamily: MONO, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: on ? 'rgba(255,255,255,.18)' : c.acs, color: on ? c.bg : c.ac }}>{n.count}</span>}
       </button>; })}
     </nav>}
-    <div style={{ display: 'flex', gap: 6 }}>
+    <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
       <button className="h-ac" onClick={() => (st.unlocked ? st.lock() : st.askPin())} title={st.unlocked ? 'Lock vault' : 'Unlock vault'}
         style={{ height: 34, padding: '0 11px', borderRadius: 999, border: `1px solid ${st.unlocked ? c.ac : c.ln}`, background: st.unlocked ? c.acs : c.sf, display: 'flex', alignItems: 'center', gap: 7, color: st.unlocked ? c.ac : c.mu, fontFamily: MONO, fontSize: 10, letterSpacing: '.06em' }}>
         <span style={{ position: 'relative', width: 10, height: 12, display: 'inline-block' }}>
           <span style={{ position: 'absolute', left: 1, top: st.unlocked ? -3 : 0, width: 8, height: 7, border: '1.5px solid currentColor', borderBottom: 0, borderRadius: '4px 4px 0 0', transition: 'top .2s' }} />
           <span style={{ position: 'absolute', left: 0, bottom: 0, width: 10, height: 7, borderRadius: 2, background: 'currentColor' }} />
         </span>
-        {!mobile && <span>{st.unlocked ? 'OPEN' : 'VAULT'}</span>}
+        {!mobile && !compact && <span>{st.unlocked ? 'OPEN' : 'VAULT'}</span>}
       </button>
       <button className="h-ac" onClick={() => st.set({ ambient: true })} title="Ambient mode" style={round}>
         <span style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid var(--mu)', display: 'grid', placeItems: 'center' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--ac)' }} /></span>
