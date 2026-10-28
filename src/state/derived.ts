@@ -75,12 +75,12 @@ export function usePalette() {
   return { dark, c: dark ? DARK : LIGHT };
 }
 
-export function useIsMobile() {
-  const q = '(max-width: 430px)';
+export function useMedia(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches);
-  useEffect(() => { const mq = window.matchMedia(q); const f = () => setM(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f); }, []);
+  useEffect(() => { const mq = window.matchMedia(q); const f = () => setM(mq.matches); f(); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f); }, [q]);
   return m;
 }
+export const useIsMobile = () => useMedia('(max-width: 430px)');
 
 /** Re-render every `ms` (for "Ns ago" labels). */
 export function useTick(ms = 1000) {
