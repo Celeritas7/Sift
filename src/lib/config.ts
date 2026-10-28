@@ -21,6 +21,9 @@ export const BUILTIN_IDS = new Set(DEFAULT_TOPICS.map(t => t.id as string));
 /** Colours offered for topics (oklch hues; null = grey). */
 export const TOPIC_HUES: (number | null)[] = [300, 230, 160, 55, 20, 120, 260, 340, 90, 190, 0, null];
 export const MAX_TOPICS = 16;
+export const MAX_SUMMARY = 140;
+/** The description a topic gets when none is saved: a built-in's own text while it keeps its original name, otherwise none. */
+export const defaultSummary = (id: string, name: string) => { const b = DEFAULT_TOPICS.find(t => t.id === id); return b && b.name === name.trim() ? b.summary : ''; };
 
 /** "Travel plans" → "travel-plans"; non-Latin names give "" (the caller falls back). */
 export const slug = (name: string) => name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
@@ -36,7 +39,7 @@ export function resolveTopics(saved: TopicSetting[] | null | undefined): TopicDe
     if (!s?.id || seen.has(s.id) || typeof s.name !== 'string' || !s.name.trim()) continue; seen.add(s.id);
     const base = byId.get(s.id), name = s.name.trim().slice(0, 40);
     out.push({ id: s.id, name, hue: s.hue === null || typeof s.hue === 'number' ? s.hue : base?.hue ?? null, tag: uniq(slug(name) || base?.tag || s.id.replace(/^u_/, 'topic-')),
-      span: base?.span ?? 'span 1', summary: s.summary?.trim() || (base && base.name === name ? base.summary : base?.summary ?? 'Your own topic.'), ...(base ? {} : { custom: true }) });
+      span: base?.span ?? 'span 1', summary: typeof s.summary === 'string' ? s.summary.trim().slice(0, MAX_SUMMARY) : defaultSummary(s.id, name), ...(base ? {} : { custom: true }) });
   }
   DEFAULT_TOPICS.forEach(t => { if (!seen.has(t.id)) out.push({ ...t, tag: uniq(t.tag) }); });
   return out;

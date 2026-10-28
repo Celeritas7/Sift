@@ -29,7 +29,7 @@ export function Lens() {
           </div>
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <h3 style={{ margin: 0, fontFamily: SERIF, fontSize: 22, fontWeight: 400, letterSpacing: '-.01em' }}>{t.name}</h3>
-            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--mu)', textWrap: 'pretty' }}>{locked ? 'This whole thread lives in your vault. Unlock to see it.' : t.summary}</p>
+            {(locked || t.summary) && <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--mu)', textWrap: 'pretty' }}>{locked ? 'This whole thread lives in your vault. Unlock to see it.' : t.summary}</p>}
           </div>
         </button>;
       })}
