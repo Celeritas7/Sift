@@ -7,6 +7,8 @@
 
 html, body { margin: 0; padding: 0; background: var(--bg, #F4F0E8); }
 * { box-sizing: border-box; }
+/* Long unbroken strings (URLs) wrap instead of widening the page, which lets mobile Chrome zoom out. */
+h1, h2, h3, h4, p, li { overflow-wrap: anywhere; }
 a { color: var(--ac); text-decoration: none; } a:hover { text-decoration: underline; }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: default; }

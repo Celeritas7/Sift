@@ -87,7 +87,7 @@ export function App() {
 
   const Screen = { stream: Stream, week: Week, map: MapView, collage: Collage, lens: Lens, todos: Todos, conflicts: Conflicts, archive: Archive }[st.view];
   return <div data-screen-label="Sift" style={shell}>
-    <div style={{ maxWidth: mobile ? 430 : 1240, margin: '0 auto', minHeight: '100dvh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <div style={{ maxWidth: mobile ? 430 : 1240, margin: '0 auto', minHeight: '100dvh', overflowX: 'clip', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <Header />
       {st.error && <div role="alert" style={{ margin: mobile ? '0 16px' : '0 36px', padding: '10px 14px', borderRadius: 12, background: 'var(--acs)', color: 'var(--ink)', fontSize: 13, display: 'flex', gap: 10, alignItems: 'center' }}>
         <span style={{ flex: 1 }}>{st.error}</span><button onClick={() => st.set({ error: null })} aria-label="Dismiss" style={{ border: 0, background: 'transparent', color: 'var(--mu)' }}>×</button></div>}
