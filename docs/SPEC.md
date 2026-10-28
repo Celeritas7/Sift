@@ -21,7 +21,7 @@ This package turns the prototype into a **launchable PWA on Vite + React + Supab
 - Offline: **yes** — IndexedDB cache (Dexie) + background sync queue; last-write-wins by `updated_at`.
 - Weekly Focus: shared project. Read/write its table `weekly_focus_entries (board_id, item_key, payload jsonb)` — board `my_week`; row `__board` holds `meta.weekOf`; other rows are items with `payload.subtasks[]`. Subtask fields: id, t, done, u (ms), del, when (YYYY-MM-DD), md (b|p|o), urg, dl, loc, tag (ca|cd|cw|td), ctx (['@train',…]), lat (parked) + latAt, rv (revisit date), src (origin link or null). Item payload: active, pri, objective, notes, ord, targetDone, subtasks.
 - Sift→WF rule: Engineering notes → `md:'o'`, everything else `md:'p'`. Item suggestion by topic prefix: Engineering → `office:*`, Software → `app:*`, Language → `study:*`; else first active item. The user **confirms** the item before sending. Parked subtasks (`lat:true`) are **hidden** in Sift.
-- Vault: **4-digit PIN** (demo 0000). Vault contains: notes flagged private at import, the whole **Career** topic, and any note the user moves there. While locked: show a **"Locked note"** placeholder row in the stream; exclude from search, Map, related, to-dos, Lens counts. Unlock lasts for the session (Phase 4 adds auto-relock after 2 min).
+- Vault: **4-digit PIN** (demo 0000). Vault contains: notes flagged private at import, the whole **Career** topic, and any note the user moves there. While locked: show a **"Locked note"** placeholder row in the stream; exclude from search, Map, related, to-dos, Lens counts. Unlock relocks after 2 min without input (time in the background counts; an unsaved vault-note edit is saved first).
 - Ambient: after **60 s idle** or via the header button, full-screen note that changes every **20 s**, drawn from the oldest notes not yet opened. Any key/tap exits; Space skips.
 - Resurface card ("From your past") at top of Stream rotates every ~9 s through the same pool.
 - Composer visible on **every screen**.
@@ -122,7 +122,7 @@ Spacing: 4/6/8/10/12/14/16/18/20/22/28/32/36/44/56.
 1. **Done in prototype** — composer, Map zoom/drag/topic highlight.
 2. Note view: inline edit + save, add/remove labels.
 3. Stream: excerpt line under summary, optional group-by-topic.
-4. Week: drag task between items, show notes mentioning a task; Vault auto-relock 2 min; Mobile swipe (left archive, right pin); header tidy.
+4. Week: drag task between items, show notes mentioning a task; Vault auto-relock 2 min (done); Mobile swipe (left archive, right pin); header tidy.
 
 ## Files in this package
 - [`docs/prototype/Sift v3.dc.html`](prototype/Sift%20v3.dc.html) — the prototype (template + logic). Open it in a browser; needs `support.js` and `sift-data.js` beside it (they are, in `docs/prototype/`).

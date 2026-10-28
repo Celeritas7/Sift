@@ -39,7 +39,7 @@ Search-bar commands: /new /week /map /collage /ambient /vault /todos /import /ar
 To tick a subtask: read the item row, map `payload.subtasks` replacing the one with matching `id` (`done`, `u: Date.now()`), update the row. To add from Sift: push `{ id:'s_'+rand, t, done:false, u:Date.now(), del:false, when:'', md: topic==='eng'?'o':'p', urg:false, dl:false, loc:'', tag:'', ctx, lat:false, latAt:0, rv:'', src:'sift:<noteId>#<ord>' }`. Store `wf_item_key` + `wf_subtask_id` on `sift_todos`.
 
 ## 5. Vault
-PIN is never stored in the client. `rpc('sift_set_pin', {p_pin})` once; `rpc('sift_check_pin', {p_pin})` to unlock; keep `vaultUnlocked` in memory only (sessionStorage at most). Vault notes are still fetched (RLS allows owner) but filtered out of search/map/todos until unlocked; Phase 4 adds auto-relock.
+PIN is never stored in the client. `rpc('sift_set_pin', {p_pin})` once; `rpc('sift_check_pin', {p_pin})` to unlock; keep `vaultUnlocked` in memory only (sessionStorage at most). Vault notes are still fetched (RLS allows owner) but filtered out of search/map/todos until unlocked; it relocks after 2 min without input (`src/lib/vault.ts`).
 
 ## 6. Offline
 Dexie tables mirror sift_notes/sift_todos. Writes go to Dexie + a `queue` table; a flusher posts to Supabase on `online`/interval; conflicts resolve by newer `updated_at`.

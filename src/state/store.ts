@@ -9,6 +9,7 @@ import { sha256 } from '../keepImport';
 import { WF_BOARD } from '../lib/config';
 import { DEFAULT_COLLAGE } from '../lib/collage';
 import { anchor, anchorAll } from '../lib/highlights';
+import { markLocked, markUnlocked, restoreUnlocked, runBeforeLock } from '../lib/vault';
 import wfSample from '../../supabase/weekly_focus_sample.json';
 
 export type View = 'stream' | 'week' | 'map' | 'collage' | 'lens' | 'todos' | 'conflicts' | 'archive';
@@ -202,7 +203,7 @@ export const useStore = create<State>()((set, get) => {
         phase: 'ready', userId: user, profile, notes: byId(notes, n => n.id), todos: byId(todos, t => t.id), highlights: byId(highlights, h => h.id),
         layout: groupLayout(layout, collageSeed(settings)), wf: byId(wfRows, e => e.item_key),
         digests: byId(digests, x => x.week_of), dismissed: Object.fromEntries(dismissals.map(x => [pairKey(x.a, x.b), true as const])),
-        settings: settings ?? DEFAULT_SETTINGS(user), collage: collageOf(settings), opened, pinIsDemo, unlocked: sessionStorage.getItem('sift-unlocked') === user,
+        settings: settings ?? DEFAULT_SETTINGS(user), collage: collageOf(settings), opened, pinIsDemo, unlocked: restoreUnlocked(user),
       });
       if (!cloud) return;
       setSyncHandlers({
@@ -229,18 +230,18 @@ export const useStore = create<State>()((set, get) => {
       if (supabase) { if (!navigator.onLine) return 'offline'; const r = await supabase.rpc('sift_check_pin', { p_pin: pin }); if (r.error) return 'offline'; ok = !!r.data; }
       else ok = (await sha256(LOCAL_SALT + pin)) === (await getMeta('pinHash', ''));
       if (!ok) return 'wrong';
-      const after = get().pin.after; sessionStorage.setItem('sift-unlocked', get().userId);
+      const after = get().pin.after; markUnlocked(get().userId);
       set({ unlocked: true, pin: { open: false, mode: 'enter', after: null } }); if (after) get().openNote(after);
       return 'ok';
     },
     async setPin(pin) {
       if (supabase) { const r = await supabase.rpc('sift_set_pin', { p_pin: pin }); if (r.error) { set({ error: 'Could not set PIN: ' + r.error.message }); return false; } }
       else { await setMeta('pinHash', await sha256(LOCAL_SALT + pin)); await setMeta('pinIsDemo', false); }
-      const after = get().pin.after; sessionStorage.setItem('sift-unlocked', get().userId);
+      const after = get().pin.after; markUnlocked(get().userId);
       set({ hasPin: true, pinIsDemo: false, unlocked: true, pin: { open: false, mode: 'enter', after: null } }); if (after) get().openNote(after);
       return true;
     },
-    lock: () => { sessionStorage.removeItem('sift-unlocked'); const s = get().selId; set({ unlocked: false, selId: s && get().notes[s]?.vault ? null : s }); },
+    lock: () => { runBeforeLock(); markLocked(); const s = get().selId; set({ unlocked: false, selId: s && get().notes[s]?.vault ? null : s }); },
     showToast: t => set({ toast: t }),
 
     async addNotes(list, files = []) {
