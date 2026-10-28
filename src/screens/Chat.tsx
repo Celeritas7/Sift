@@ -1,13 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import { useIndex, useIsMobile, useNotes, usePalette } from '../state/derived';
-import { buildChat, type ChatMsg } from '../lib/chat';
+import { buildChat, initials, type ChatMsg } from '../lib/chat';
 import { MONO, SERIF, TOPICS, topicColor, topicName } from '../lib/config';
 import { plural } from '../lib/format';
-import { Eyebrow, H1, Lede } from '../components/ui';
+import { Eyebrow, H1, Lede, inkBtn } from '../components/ui';
+import { VideoModal } from '../components/VideoModal';
 
 const PAGE = 60;
-const initials = (topic: string) => (TOPICS.find(t => t.id === topic)?.tag ?? 'scraps').slice(0, 2).toUpperCase();
 const time = (ts: number) => new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
 function Avatar({ topic, size = 32 }: { topic: string; size?: number }) {
@@ -18,7 +18,7 @@ function Avatar({ topic, size = 32 }: { topic: string; size?: number }) {
 /** Your notes as a group chat between topics: replies from text similarity, reactions from labels, to-dos and pins. */
 export function Chat() {
   const st = useStore(); const { dark } = usePalette(); const mobile = useIsMobile(); const { open, byId } = useNotes(); const index = useIndex();
-  const [limit, setLimit] = useState(PAGE); const [flash, setFlash] = useState<string | null>(null);
+  const [limit, setLimit] = useState(PAGE); const [flash, setFlash] = useState<string | null>(null); const [video, setVideo] = useState(false);
   const { msgs, earlier } = useMemo(() => buildChat([...open].reverse().map(n => ({ id: n.id, topic: n.topic, title: n.title || 'Untitled', sum: n.sum, ts: n.ts, pinned: n.pinned, labels: n.labels, todos: n.todoList })),
     (a, b) => index.sim(a, b), limit), [open, index, limit]);
   const members = TOPICS.filter(t => msgs.some(m => m.topic === t.id));
@@ -64,6 +64,7 @@ export function Chat() {
         <div style={{ display: 'flex' }}>{members.map((t, i) => <span key={t.id} title={t.name} style={{ marginLeft: i ? -8 : 0, borderRadius: '50%', border: '2px solid var(--bg)', display: 'flex' }}><Avatar topic={t.id} size={28} /></span>)}</div>
         <span style={{ fontSize: 13, color: 'var(--mu)' }}>{members.map(t => t.name).join(', ')}</span>
       </div>
+      <button onClick={() => setVideo(true)} style={{ ...inkBtn, alignSelf: 'flex-start', minHeight: mobile ? 44 : undefined, display: 'flex', alignItems: 'center', gap: 8 }}><span aria-hidden="true">▶</span>Make video</button>
     </div>
     <section aria-label="Chat" style={{ display: 'flex', flexDirection: 'column', maxWidth: 720, width: '100%', margin: mobile ? 0 : '0 auto' }}>
       {earlier > 0 && <button onClick={showEarlier} className="h-ac" style={{ alignSelf: 'center', padding: '6px 14px', minHeight: mobile ? 44 : undefined, border: '1px solid var(--ln)', borderRadius: 999, background: 'transparent', fontSize: 12 }}>Show earlier · {earlier} more</button>}
@@ -72,5 +73,6 @@ export function Chat() {
         {bubble(m)}
       </div>)}
     </section>
+    {video && <VideoModal onClose={() => setVideo(false)} />}
   </>;
 }

@@ -123,6 +123,7 @@ Spacing: 4/6/8/10/12/14/16/18/20/22/28/32/36/44/56.
 - **Reply**: a note quotes the most similar earlier note from another topic among the previous 25 (trigram cosine ≥ 0.15). Tapping the quote scrolls to it.
 - **Reactions** (no AI): 👍 n other topics use one of its labels · 🔥 n notes with cosine ≥ 0.3 (within 200 notes either side) · 💬 n replies · ✅ all its to-dos done · 📌 pinned.
 - Vault notes appear only while unlocked. Logic: `src/lib/chat.ts`; screen: `src/screens/Chat.tsx`.
+- **Make video** (button on Chat): records the latest 10 / 20 / 40 notes as a 720×1280 (9:16) video in the browser — canvas animation (messages pop in, the stack scrolls, reactions pop after 0.75 s; 1.5 s per message, ≈33 s for 20) captured with MediaRecorder at 30 fps. Format: H.264 MP4 when the browser can, else MP4 with another codec, else WebM. Then Share (Web Share with the file) or Save. Nothing is uploaded; vault notes are always left out, even when unlocked. Recording stops if Sift goes to the background. Code: `src/lib/video.ts` (timing, wrap, format), `src/lib/videoRender.ts` (drawing, recording), `src/components/VideoModal.tsx`.
 
 ## Phases (agreed)
 1. **Done in prototype** — composer, Map zoom/drag/topic highlight.
