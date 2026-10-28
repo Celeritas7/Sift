@@ -56,6 +56,18 @@ export let TOPICS: TopicDef[] = DEFAULT_TOPICS;
 export let TAG_TO_TOPIC: Record<string, Topic> = tagMap(DEFAULT_TOPICS);
 export function applyTopics(saved: TopicSetting[] | null | undefined) { TOPICS = resolveTopics(saved); TAG_TO_TOPIC = tagMap(TOPICS); }
 
+/** The topic a Keep label files a note under, or null. Exact matches (tag, name, a renamed built-in's original tag) win;
+ *  otherwise the label must start with a whole word of the topic: "Engineering notes" and "languages" match, but "artificial" doesn't match "Art". */
+export function topicForLabel(label: string): Topic | null {
+  const l = label.trim().toLowerCase(), ls = slug(label); if (!l) return null;
+  const keys = (t: TopicDef) => [t.tag, slug(t.name), DEFAULT_TOPICS.find(d => d.id === t.id)?.tag].filter((k): k is string => !!k);
+  const exact = TOPICS.find(t => t.name.toLowerCase() === l || (ls && keys(t).includes(ls))); if (exact) return exact.id;
+  if (!ls) return null;
+  let best: { id: Topic; len: number } | null = null;
+  for (const t of TOPICS) for (const k of keys(t)) if ((ls.startsWith(k + '-') || ls === k + 's' || ls === k + 'es') && k.length > (best?.len ?? 0)) best = { id: t.id, len: k.length };
+  return best?.id ?? null;
+}
+
 export const topicName = (id: Topic | null | undefined) => TOPICS.find(t => t.id === id)?.name ?? 'Scraps';
 export const topicColor = (id: Topic | null | undefined, dark: boolean) => {
   const hue = TOPICS.find(t => t.id === id)?.hue ?? null;
