@@ -4,7 +4,9 @@ import { useIndex, useIsMobile, useNotes, usePalette } from '../state/derived';
 import { buildChat, initials, type ChatMsg } from '../lib/chat';
 import { MONO, SERIF, TOPICS, topicColor, topicName } from '../lib/config';
 import { plural } from '../lib/format';
-import { Eyebrow, H1, Lede, inkBtn } from '../components/ui';
+import { Eyebrow, H1, Lede, ghostBtn, inkBtn } from '../components/ui';
+import { AI_READY, TALK_NOTES } from '../lib/ai';
+import { NO_AI } from '../lib/config';
 import { VideoModal } from '../components/VideoModal';
 
 const PAGE = 60;
@@ -22,6 +24,10 @@ export function Chat() {
   const { msgs, earlier } = useMemo(() => buildChat([...open].reverse().map(n => ({ id: n.id, topic: n.topic, title: n.title || 'Untitled', sum: n.sum, ts: n.ts, pinned: n.pinned, labels: n.labels, todos: n.todoList })),
     (a, b) => index.sim(a, b), limit), [open, index, limit]);
   const members = TOPICS.filter(t => msgs.some(m => m.topic === t.id));
+  // AI comments, only on notes shown here and never on vault notes (even while unlocked).
+  const talkOn = useMemo(() => { const out: Record<string, typeof st.talk> = {}; st.talk.forEach(c => { const n = byId[c.note_id]; if (n && !n.vault) (out[c.note_id] ||= []).push(c); }); return out; }, [st.talk, byId]);
+  const talkIds = msgs.filter(m => !byId[m.id]?.vault).slice(-TALK_NOTES).map(m => m.id);
+  const talking = !!st.aiBusy.talk;
 
   // Open at the newest message (and follow new ones), like a chat; "Show earlier" keeps the reader's place instead.
   const keep = useRef<number | null>(null);
@@ -51,6 +57,14 @@ export function Chat() {
           {m.reactions.map(r => <span key={r.emoji} title={r.why} aria-label={r.why} style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '1px 7px', border: '1px solid var(--ln)', borderRadius: 999, background: 'var(--bg)', fontSize: 12 }}>
             <span>{r.emoji}</span>{r.n > 1 && <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--mu)' }}>{r.n}</span>}</span>)}
         </div>}
+        {(talkOn[m.id] ?? []).map(cm => <div key={cm.topic} data-ai-comment style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 4, maxWidth: '100%' }}>
+          <Avatar topic={cm.topic} size={22} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 11px', border: '1px dashed var(--ln)', borderRadius: '4px 14px 14px 14px', background: 'var(--bg)', minWidth: 0 }}>
+            <span style={{ display: 'flex', gap: 6, alignItems: 'baseline', fontSize: 11, fontWeight: 600, color: topicColor(cm.topic, dark) }}>{topicName(cm.topic)}
+              <span title="Written by Claude" style={{ fontFamily: MONO, fontSize: 9, fontWeight: 400, letterSpacing: '.06em', padding: '0 5px', borderRadius: 4, background: 'var(--sf2)', color: 'var(--mu)' }}>AI</span></span>
+            <span style={{ fontSize: 14, lineHeight: 1.4 }}>{cm.text}</span>
+          </div>
+        </div>)}
       </div>
     </div>;
   };
@@ -64,7 +78,13 @@ export function Chat() {
         <div style={{ display: 'flex' }}>{members.map((t, i) => <span key={t.id} title={t.name} style={{ marginLeft: i ? -8 : 0, borderRadius: '50%', border: '2px solid var(--bg)', display: 'flex' }}><Avatar topic={t.id} size={28} /></span>)}</div>
         <span style={{ fontSize: 13, color: 'var(--mu)' }}>{members.map(t => t.name).join(', ')}</span>
       </div>
-      <button onClick={() => setVideo(true)} style={{ ...inkBtn, alignSelf: 'flex-start', minHeight: mobile ? 44 : undefined, display: 'flex', alignItems: 'center', gap: 8 }}><span aria-hidden="true">▶</span>Make video</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => setVideo(true)} style={{ ...inkBtn, minHeight: mobile ? 44 : undefined, display: 'flex', alignItems: 'center', gap: 8 }}><span aria-hidden="true">▶</span>Make video</button>
+        <button onClick={() => void st.letThemTalk(talkIds)} disabled={!AI_READY || talking || talkIds.length < 2} title={AI_READY ? 'Claude writes a few comments between your topics' : NO_AI}
+          style={{ ...inkBtn, background: 'var(--ac)', color: 'var(--acink)', minHeight: mobile ? 44 : undefined, opacity: AI_READY && talkIds.length >= 2 ? 1 : .45 }}>{talking ? 'Listening in…' : st.talk.length ? '✨ Talk again' : '✨ Let them talk'}</button>
+        {st.talk.length > 0 && !talking && <button onClick={() => void st.clearTalk()} style={{ ...ghostBtn, minHeight: mobile ? 44 : undefined }}>Clear AI comments</button>}
+      </div>
+      <span style={{ fontSize: 12, color: 'var(--mu)' }}>{AI_READY ? `"Let them talk" sends your latest ${TALK_NOTES} non-vault notes to Claude for a few comments, marked AI and kept on this device.` : NO_AI + '.'}</span>
     </div>
     <section aria-label="Chat" style={{ display: 'flex', flexDirection: 'column', maxWidth: 720, width: '100%', margin: mobile ? 0 : '0 auto' }}>
       {earlier > 0 && <button onClick={showEarlier} className="h-ac" style={{ alignSelf: 'center', padding: '6px 14px', minHeight: mobile ? 44 : undefined, border: '1px solid var(--ln)', borderRadius: 999, background: 'transparent', fontSize: 12 }}>Show earlier · {earlier} more</button>}

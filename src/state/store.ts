@@ -10,7 +10,7 @@ import { WF_BOARD } from '../lib/config';
 import { DEFAULT_COLLAGE } from '../lib/collage';
 import { anchor, anchorAll } from '../lib/highlights';
 import { markLocked, markUnlocked, restoreUnlocked, runBeforeLock } from '../lib/vault';
-import { AI_CHUNK, aiDigest, aiSummarize } from '../lib/ai';
+import { AI_CHUNK, aiDigest, aiSummarize, aiTalk, type Comment } from '../lib/ai';
 import wfSample from '../../supabase/weekly_focus_sample.json';
 
 export type View = 'stream' | 'week' | 'map' | 'collage' | 'chat' | 'lens' | 'todos' | 'conflicts' | 'archive';
@@ -48,6 +48,8 @@ interface State {
   pending: number; error: string | null; hasPin: boolean; pinIsDemo: boolean;
   /** AI work in flight: keys like 'note:<id>' / 'digest:<week>', and the progress of a bulk summary run. */
   aiBusy: Record<string, true>; aiBulk: { done: number; total: number; stop: boolean } | null;
+  /** Chat comments by Claude ("Let them talk"), kept on this device only. */
+  talk: Comment[];
   view: View; filter: string; query: string; selId: string | null; unlocked: boolean; collage: CollageSettings;
   pin: { open: boolean; mode: 'enter' | 'set'; after: string | null }; toast: Toast | null; importOpen: boolean;
   ambient: boolean; opened: Record<string, true>; sessionNew: Record<string, true>; composerFocused: boolean; sendFor: string | null; sendItem: string | null; map: MapUi; week: string | null;
@@ -75,6 +77,9 @@ interface State {
   /** Summaries by Claude for these notes (vault notes are skipped by the server). Returns how many were saved. */
   summarizeNotes(ids: string[], bulk?: boolean): Promise<number>;
   writeDigest(weekOf: string, ids: string[]): Promise<boolean>;
+  /** New comments for these notes (replacing their old ones). */
+  letThemTalk(ids: string[]): Promise<number>;
+  clearTalk(): Promise<void>;
   moveWfSubtask(from: string, subId: string, to: string): Promise<void>;
   setLayout(kind: LayoutKind, noteId: string, x: number, y: number): Promise<void>;
   /** Forget every saved position of one layout (the other layout is untouched). */
@@ -192,7 +197,7 @@ export const useStore = create<State>()((set, get) => {
   return {
     phase: 'boot', userId: '', profile: null,
     notes: {}, todos: {}, highlights: {}, layout: NO_LAYOUT(), wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
-    pending: 0, error: null, hasPin: true, pinIsDemo: false, aiBusy: {}, aiBulk: null,
+    pending: 0, error: null, hasPin: true, pinIsDemo: false, aiBusy: {}, aiBulk: null, talk: [],
     view: 'stream', filter: 'all', query: '', selId: null, unlocked: false, collage: DEFAULT_COLLAGE, pin: { open: false, mode: 'enter', after: null }, toast: null, importOpen: false,
     ambient: false, opened: {}, sessionNew: {}, composerFocused: false, sendFor: null, sendItem: null, week: null, map: { zoom: 1, pan: { x: 0, y: 0 }, topic: null, hover: null, placed: null, dragging: null },
 
@@ -200,6 +205,7 @@ export const useStore = create<State>()((set, get) => {
       const d = openDb(user);
       const [notes, todos, highlights, layout, wf, digests, dismissals, settings] = await Promise.all([
         d.notes.toArray(), d.todos.toArray(), d.highlights.toArray(), d.layouts.toArray(), d.wf.toArray(), d.digests.toArray(), d.dismissals.toArray(), getMeta<Settings | null>('settings', null)]);
+      const talk = await getMeta<Comment[]>('talk', []);
       let opened: Record<string, true> = {}; try { opened = JSON.parse(localStorage.getItem('sift-opened-' + user) || '{}'); } catch { /* fresh */ }
       let wfRows = wf;
       if (!cloud && !wfRows.length) { wfRows = (wfSample.rows as { item_key: string; payload: unknown }[]).map(r => ({ board_id: WF_BOARD, item_key: r.item_key, payload: r.payload } as WfEntry)); await d.wf.bulkPut(wfRows); }
@@ -210,7 +216,7 @@ export const useStore = create<State>()((set, get) => {
         phase: 'ready', userId: user, profile, notes: byId(notes, n => n.id), todos: byId(todos, t => t.id), highlights: byId(highlights, h => h.id),
         layout: groupLayout(layout, collageSeed(settings)), wf: byId(wfRows, e => e.item_key),
         digests: byId(digests, x => x.week_of), dismissed: Object.fromEntries(dismissals.map(x => [pairKey(x.a, x.b), true as const])),
-        settings: settings ?? DEFAULT_SETTINGS(user), collage: collageOf(settings), opened, pinIsDemo, unlocked: restoreUnlocked(user),
+        settings: settings ?? DEFAULT_SETTINGS(user), collage: collageOf(settings), opened, pinIsDemo, unlocked: restoreUnlocked(user), talk,
       });
       if (!cloud) return;
       setSyncHandlers({
@@ -357,6 +363,17 @@ export const useStore = create<State>()((set, get) => {
       } catch (e) { set({ error: (e as Error).message }); return false; }
       finally { const { [key]: _, ...rest } = get().aiBusy; set({ aiBusy: rest }); }
     },
+
+    async letThemTalk(ids) {
+      if (get().aiBusy.talk) return 0; set({ aiBusy: { ...get().aiBusy, talk: true } });
+      try {
+        const r = await aiTalk(ids); const sent = new Set(ids);
+        const talk = [...get().talk.filter(c => !sent.has(c.note_id)), ...r.comments];
+        set({ talk }); await setMeta('talk', talk); return r.comments.length;
+      } catch (e) { set({ error: (e as Error).message }); return 0; }
+      finally { const { talk: _, ...rest } = get().aiBusy; set({ aiBusy: rest }); }
+    },
+    async clearTalk() { set({ talk: [] }); await setMeta('talk', []); },
 
     async moveWfSubtask(from, subId, to) {
       const a = get().wf[from], b = get().wf[to]; if (from === to || !a || !b || !isItem(a) || !isItem(b)) return;

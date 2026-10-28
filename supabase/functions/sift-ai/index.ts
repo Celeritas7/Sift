@@ -1,10 +1,10 @@
-// sift-ai: note summaries and weekly digests with Claude. Deploy: supabase functions deploy sift-ai
+// sift-ai: note summaries, weekly digests and Chat comments ("Let them talk") with Claude. Deploy: supabase functions deploy sift-ai
 // Secrets: ANTHROPIC_API_KEY (supabase secrets set). SUPABASE_URL / SUPABASE_ANON_KEY are provided by Supabase.
 // It reads notes as the signed-in user (row-level security applies), never sends vault notes, and writes nothing:
 // the app saves the results through its normal sync.
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
-import { batches, checkSummaries, DIGEST_SYSTEM, digestInput, isIdList, isWeekOf, MAX_DIGEST_IDS, MAX_IDS, MODEL, type NoteRow, SUMMARY_SCHEMA, SUMMARY_SYSTEM, summaryInput, type Summary } from './lib.ts';
+import { batches, checkComments, checkSummaries, DIGEST_SYSTEM, digestInput, isIdList, isWeekOf, MAX_DIGEST_IDS, MAX_IDS, MAX_TALK_IDS, MODEL, newestThatFit, type NoteRow, SUMMARY_SCHEMA, SUMMARY_SYSTEM, summaryInput, type Summary, TALK_SCHEMA, TALK_SYSTEM, talkInput } from './lib.ts';
 
 const anthropic = new Anthropic(); // ANTHROPIC_API_KEY from the function's secrets
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -34,7 +34,7 @@ Deno.serve(async req => {
 
   let body: { action?: string; ids?: unknown; week_of?: unknown };
   try { body = await req.json(); } catch { return json({ error: 'Bad JSON' }, 400); }
-  const max = body.action === 'digest' ? MAX_DIGEST_IDS : MAX_IDS;
+  const max = body.action === 'digest' ? MAX_DIGEST_IDS : body.action === 'talk' ? MAX_TALK_IDS : MAX_IDS;
   if (!isIdList(body.ids, max)) return json({ error: `ids: 1 to ${max} note ids` }, 400);
   const rows = await sb.from('sift_notes').select('id,title,body,topic,lang,created_at')
     .in('id', body.ids).eq('user_id', user.id).eq('vault', false).is('deleted_at', null).order('created_at');
@@ -56,7 +56,14 @@ Deno.serve(async req => {
       if (!notes.length) return json({ error: 'No notes to write about (vault notes are left out).' }, 400);
       return json({ text: await ask(DIGEST_SYSTEM, digestInput(body.week_of, notes), 'medium'), skipped });
     }
-    return json({ error: 'action: summarize or digest' }, 400);
+    if (body.action === 'talk') {
+      // Career is the vault topic: never sent (the vault filter above already drops it, this is belt and braces).
+      const chat = newestThatFit(notes.filter(n => n.topic !== 'career'));
+      if (chat.length < 2) return json({ error: 'Need at least two notes for the topics to talk about.' }, 400);
+      const text = await ask(TALK_SYSTEM, talkInput(chat), 'medium', TALK_SCHEMA);
+      return json({ comments: checkComments(JSON.parse(text), chat), skipped });
+    }
+    return json({ error: 'action: summarize, digest or talk' }, 400);
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return json({ error: 'Claude is busy. Try again in a minute.' }, 429);
     if (e instanceof Anthropic.AuthenticationError) return json({ error: 'The Anthropic API key is missing or wrong (supabase secrets set ANTHROPIC_API_KEY=…).' }, 500);
