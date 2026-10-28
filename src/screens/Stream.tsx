@@ -6,6 +6,7 @@ import { DEFAULT_STREAM, MONO, NO_AI, SERIF, TOPICS, topicColor } from '../lib/c
 import { ago, DOW, fmtShort, MONTHS, plural } from '../lib/format';
 import { focusComposer } from '../state/focus';
 import { Chip, Eyebrow, inkBtn, pill, Switch } from '../components/ui';
+import { SwipeRow } from '../components/SwipeRow';
 import { segStyle } from '../components/CollageText';
 import { hl, marker } from '../lib/collage';
 import { pickExcerpt, type Excerpt } from '../lib/parse';
@@ -102,7 +103,8 @@ function ExcerptLine({ x }: { x: Excerpt }) {
 
 export function NoteRow({ n, conflict, own = [], excerpt = null }: { n: NoteV; conflict: boolean; own?: Anchored[]; excerpt?: Excerpt | null }) {
   const st = useStore(); const mobile = useIsMobile(); const d = new Date(n.ts); const wc = n.body.trim().split(/\s+/).filter(Boolean).length;
-  return <article onClick={() => st.openNote(n.id)} className="h-sf" style={{ display: 'grid', gridTemplateColumns: mobile ? '40px minmax(0,1fr)' : '56px minmax(0,1fr) 80px', gap: mobile ? 12 : 20, padding: '18px 14px', margin: '0 -14px', borderTop: '1px solid var(--ln)', borderRadius: 12, cursor: 'pointer', transition: 'background .15s' }}>
+  const swipe = mobile && !n.hidden;
+  const row = <article onClick={() => st.openNote(n.id)} className="h-sf" style={{ display: 'grid', gridTemplateColumns: mobile ? '40px minmax(0,1fr)' : '56px minmax(0,1fr) 80px', gap: mobile ? 12 : 20, padding: '18px 14px', margin: swipe ? 0 : '0 -14px', borderTop: '1px solid var(--ln)', borderRadius: 12, cursor: 'pointer', transition: 'background .15s' }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: MONO, fontSize: 11, color: 'var(--mu)', lineHeight: 1.4 }}>
       <span style={{ color: 'var(--ink)', fontSize: 13 }}>{d.getDate()}</span><span>{DOW[d.getDay()]}</span>
     </div>
@@ -121,6 +123,10 @@ export function NoteRow({ n, conflict, own = [], excerpt = null }: { n: NoteV; c
       <span style={{ color: 'var(--ac)' }}>{n.hidden ? 'VAULT' : n.lang}</span><span>{n.hidden ? '' : wc < 2 ? '1 line' : wc + ' words'}</span>
     </div>}
   </article>;
+  if (!swipe) return row;
+  const pin = () => { const was = n.pinned; void st.updateNote(n.id, { pinned: !was }); st.showToast({ id: n.id, msg: was ? 'Unpinned' : 'Pinned', undo: () => void useStore.getState().updateNote(n.id, { pinned: was }) }); };
+  const archive = () => { void st.updateNote(n.id, { archived: true }); st.showToast({ id: n.id, msg: 'Archived', undo: () => void useStore.getState().updateNote(n.id, { archived: false }) }); };
+  return <SwipeRow pinned={n.pinned} onPin={pin} onArchive={archive} style={{ margin: '0 -14px' }}>{row}</SwipeRow>;
 }
 
 const ROW_LIMIT = 8;
