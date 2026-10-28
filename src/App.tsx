@@ -7,6 +7,8 @@ import { unsubscribe } from './lib/sync';
 import { SANS } from './lib/config';
 import { useKeyboardInset } from './lib/keyboard';
 import { lastSeen, markSeen, relockDue } from './lib/vault';
+import { AI_READY } from './lib/ai';
+import { mondayOf } from './lib/format';
 import type { Profile } from './types';
 import { Header, MobileNav } from './components/Header';
 import { Composer } from './components/Composer';
@@ -78,6 +80,25 @@ function useVaultRelock() {
   }, [unlocked]);
 }
 
+/** "Write one automatically every Monday": once the week is over, write last week's digest if it has none (once per week per device).
+ *  Waits a few seconds after the notes change, so the first sync has landed before it looks. */
+function useAutoDigest() {
+  const phase = useStore(s => s.phase), on = useStore(s => s.settings.monday_digest), count = useStore(s => Object.keys(s.notes).length);
+  useEffect(() => {
+    if (!AI_READY || phase !== 'ready' || !on) return;
+    const t = setTimeout(() => {
+      const s = useStore.getState(), week = mondayOf(Date.now() - 7 * 864e5), key = `sift-auto-digest-${s.userId}-${week}`;
+      if (s.digests[week]?.text) return;
+      const ids = Object.values(s.notes).filter(n => !n.deleted_at && !n.archived && !n.vault && mondayOf(Date.parse(n.created_at)) === week)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)).map(n => n.id).slice(-120);
+      if (!ids.length) return;
+      try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch { return; }
+      void s.writeDigest(week, ids);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [phase, on, count]);
+}
+
 function useGlobalKeys() {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -91,7 +112,7 @@ function useGlobalKeys() {
 }
 
 export function App() {
-  useBoot(); useGlobalKeys(); useIdleAmbient(); useVaultRelock(); useKeyboardInset();
+  useBoot(); useGlobalKeys(); useIdleAmbient(); useVaultRelock(); useAutoDigest(); useKeyboardInset();
   const st = useStore(); const { c } = usePalette(); const mobile = useIsMobile();
   const vars = { '--bg': c.bg, '--sf': c.sf, '--sf2': c.sf2, '--ink': c.ink, '--mu': c.mu, '--ln': c.ln, '--ac': c.ac, '--acs': c.acs, '--acink': c.acink } as CSSProperties;
   useEffect(() => {
@@ -109,6 +130,9 @@ export function App() {
       <Header />
       {st.error && <div role="alert" style={{ margin: mobile ? '0 16px' : '0 36px', padding: '10px 14px', borderRadius: 12, background: 'var(--acs)', color: 'var(--ink)', fontSize: 13, display: 'flex', gap: 10, alignItems: 'center' }}>
         <span style={{ flex: 1 }}>{st.error}</span><button onClick={() => st.set({ error: null })} aria-label="Dismiss" style={{ border: 0, background: 'transparent', color: 'var(--mu)' }}>×</button></div>}
+      {st.aiBulk && <div role="status" style={{ margin: mobile ? '0 16px' : '0 36px', padding: '10px 14px', borderRadius: 12, background: 'var(--sf)', border: '1px solid var(--ln)', fontSize: 13, display: 'flex', gap: 10, alignItems: 'center' }}>
+        <span style={{ flex: 1 }}>{st.aiBulk.stop ? 'Stopping after this batch…' : `Summarising notes with Claude… ${st.aiBulk.done} of ${st.aiBulk.total}`}</span>
+        {!st.aiBulk.stop && <button onClick={() => st.set({ aiBulk: { ...st.aiBulk!, stop: true } })} style={{ border: '1px solid var(--ln)', borderRadius: 999, background: 'transparent', padding: '4px 12px', fontSize: 12, minHeight: mobile ? 36 : undefined }}>Stop</button>}</div>}
       <main style={{ padding: mobile ? '10px 16px 150px' : '22px 36px 170px', display: 'flex', flexDirection: 'column', gap: mobile ? 28 : 44, flex: 1 }}>
         <Screen />
       </main>

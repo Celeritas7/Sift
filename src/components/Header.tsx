@@ -6,6 +6,7 @@ import { MONO, SERIF, topicColor } from '../lib/config';
 import { fmtShort } from '../lib/format';
 import { focusComposer } from '../state/focus';
 import { cloud, signOut } from '../lib/supabase';
+import { AI_READY } from '../lib/ai';
 
 export const NAV: { id: View; label: string; mobile?: string }[] = [
   { id: 'stream', label: 'Stream' }, { id: 'week', label: 'Week' }, { id: 'map', label: 'Map' }, { id: 'collage', label: 'Collage' }, { id: 'chat', label: 'Chat' }, { id: 'lens', label: 'Lens' },
@@ -18,7 +19,8 @@ export function useNavItems() {
 }
 
 export function useCommands() {
-  const st = useStore(); const { dark } = usePalette();
+  const st = useStore(); const { dark } = usePalette(); const { open } = useNotes();
+  const unsummed = AI_READY && !st.aiBulk ? open.filter(n => !n.vault && !n.summary).map(n => n.id) : [];
   const cmds = [
     { key: '/new', label: 'Write a note', run: () => { st.set({ query: '', selId: null }); focusComposer(); } },
     { key: '/week', label: 'Weekly Focus board', run: () => st.go('week') },
@@ -32,6 +34,7 @@ export function useCommands() {
     { key: '/archive', label: 'Archive', run: () => st.go('archive') },
     { key: dark ? '/light' : '/dark', label: 'Switch theme', run: () => { st.set({ query: '' }); void st.setSettings({ theme: dark ? 'light' : 'dark' }); } },
     { key: '/excerpts', label: (st.settings.stream?.excerpt ?? true) ? 'Hide excerpts in the stream' : 'Show excerpts in the stream', run: () => { st.set({ query: '' }); void st.setSettings({ stream: { ...st.settings.stream, excerpt: !(st.settings.stream?.excerpt ?? true) } }); } },
+    ...(unsummed.length ? [{ key: '/summarize', label: `Summarise ${unsummed.length} note${unsummed.length === 1 ? '' : 's'} without a summary (Claude)`, run: () => { st.set({ query: '' }); void st.summarizeNotes(unsummed, true); } }] : []),
     { key: '/pin', label: st.hasPin ? 'Change vault PIN' : 'Set a vault PIN', run: () => { st.set({ query: '' }); st.askPin(null, 'set'); } },
     ...(cloud ? [{ key: '/signout', label: 'Sign out', run: () => void signOut() }] : []),
   ];

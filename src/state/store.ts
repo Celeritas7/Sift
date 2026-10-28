@@ -10,6 +10,7 @@ import { WF_BOARD } from '../lib/config';
 import { DEFAULT_COLLAGE } from '../lib/collage';
 import { anchor, anchorAll } from '../lib/highlights';
 import { markLocked, markUnlocked, restoreUnlocked, runBeforeLock } from '../lib/vault';
+import { AI_CHUNK, aiDigest, aiSummarize } from '../lib/ai';
 import wfSample from '../../supabase/weekly_focus_sample.json';
 
 export type View = 'stream' | 'week' | 'map' | 'collage' | 'chat' | 'lens' | 'todos' | 'conflicts' | 'archive';
@@ -45,6 +46,8 @@ interface State {
   notes: Record<string, Note>; todos: Record<string, Todo>; highlights: Record<string, Highlight>; layout: Record<LayoutKind, Positions>;
   wf: Record<string, WfEntry>; wfSyncedAt: number; dismissed: Record<string, true>; digests: Record<string, Digest>; settings: Settings;
   pending: number; error: string | null; hasPin: boolean; pinIsDemo: boolean;
+  /** AI work in flight: keys like 'note:<id>' / 'digest:<week>', and the progress of a bulk summary run. */
+  aiBusy: Record<string, true>; aiBulk: { done: number; total: number; stop: boolean } | null;
   view: View; filter: string; query: string; selId: string | null; unlocked: boolean; collage: CollageSettings;
   pin: { open: boolean; mode: 'enter' | 'set'; after: string | null }; toast: Toast | null; importOpen: boolean;
   ambient: boolean; opened: Record<string, true>; sessionNew: Record<string, true>; composerFocused: boolean; sendFor: string | null; sendItem: string | null; map: MapUi; week: string | null;
@@ -69,6 +72,9 @@ interface State {
   sendTodo(todoId: string, itemKey: string): Promise<void>;
   toggleWfSubtask(itemKey: string, subId: string): Promise<void>;
   mutateWf(itemKey: string, mut: WfMutation): Promise<void>;
+  /** Summaries by Claude for these notes (vault notes are skipped by the server). Returns how many were saved. */
+  summarizeNotes(ids: string[], bulk?: boolean): Promise<number>;
+  writeDigest(weekOf: string, ids: string[]): Promise<boolean>;
   moveWfSubtask(from: string, subId: string, to: string): Promise<void>;
   setLayout(kind: LayoutKind, noteId: string, x: number, y: number): Promise<void>;
   /** Forget every saved position of one layout (the other layout is untouched). */
@@ -186,7 +192,7 @@ export const useStore = create<State>()((set, get) => {
   return {
     phase: 'boot', userId: '', profile: null,
     notes: {}, todos: {}, highlights: {}, layout: NO_LAYOUT(), wf: {}, wfSyncedAt: Date.now(), dismissed: {}, digests: {}, settings: DEFAULT_SETTINGS(''),
-    pending: 0, error: null, hasPin: true, pinIsDemo: false,
+    pending: 0, error: null, hasPin: true, pinIsDemo: false, aiBusy: {}, aiBulk: null,
     view: 'stream', filter: 'all', query: '', selId: null, unlocked: false, collage: DEFAULT_COLLAGE, pin: { open: false, mode: 'enter', after: null }, toast: null, importOpen: false,
     ambient: false, opened: {}, sessionNew: {}, composerFocused: false, sendFor: null, sendItem: null, week: null, map: { zoom: 1, pan: { x: 0, y: 0 }, topic: null, hover: null, placed: null, dragging: null },
 
@@ -320,6 +326,36 @@ export const useStore = create<State>()((set, get) => {
       const e = get().wf[itemKey]; if (!e || !isItem(e)) return; const s = e.payload.subtasks.find(x => x.id === subId); if (!s) return;
       const linked = Object.values(get().todos).find(t => t.wf_subtask_id === subId);
       if (linked) await get().toggleTodo(linked.id); else await get().mutateWf(itemKey, { type: 'set_done', id: subId, done: !s.done });
+    },
+
+    async summarizeNotes(ids, bulk = false) {
+      const busy = (keys: string[], on: boolean) => { const b = { ...get().aiBusy }; keys.forEach(k => { if (on) b['note:' + k] = true; else delete b['note:' + k]; }); set({ aiBusy: b }); };
+      let saved = 0; if (bulk) set({ aiBulk: { done: 0, total: ids.length, stop: false } });
+      try {
+        for (let i = 0; i < ids.length; i += AI_CHUNK) {
+          if (bulk && get().aiBulk?.stop) break;
+          const part = ids.slice(i, i + AI_CHUNK); busy(part, true);
+          try {
+            const r = await aiSummarize(part);
+            for (const x of r.summaries) { if (get().notes[x.id]) { await get().updateNote(x.id, { summary: x.summary, summary_orig: x.summary_orig }); saved++; } }
+            if (!bulk && r.skipped.length) set({ error: "That note hasn't reached the server yet. Try again in a moment." });
+          } finally { busy(part, false); }
+          if (bulk) set({ aiBulk: { ...get().aiBulk!, done: Math.min(ids.length, i + part.length) } });
+        }
+      } catch (e) { set({ error: (e as Error).message }); }
+      finally { if (bulk) set({ aiBulk: null }); }
+      return saved;
+    },
+
+    async writeDigest(weekOf, ids) {
+      const key = 'digest:' + weekOf; if (get().aiBusy[key]) return false; set({ aiBusy: { ...get().aiBusy, [key]: true } });
+      try {
+        const r = await aiDigest(weekOf, ids);
+        const row: Digest = { user_id: get().userId, week_of: weekOf, text: r.text, wf_line: null, generated_by: 'ai', updated_at: nowIso() };
+        set({ digests: { ...get().digests, [weekOf]: row } }); await db().digests.put(row); await persist([upsertOp('sift_digests', row)]);
+        return true;
+      } catch (e) { set({ error: (e as Error).message }); return false; }
+      finally { const { [key]: _, ...rest } = get().aiBusy; set({ aiBusy: rest }); }
     },
 
     async moveWfSubtask(from, subId, to) {
