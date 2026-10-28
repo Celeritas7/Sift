@@ -8,7 +8,7 @@ import { focusComposer } from '../state/focus';
 import { cloud, signOut } from '../lib/supabase';
 
 export const NAV: { id: View; label: string; mobile?: string }[] = [
-  { id: 'stream', label: 'Stream' }, { id: 'week', label: 'Week' }, { id: 'map', label: 'Map' }, { id: 'collage', label: 'Collage' }, { id: 'lens', label: 'Lens' },
+  { id: 'stream', label: 'Stream' }, { id: 'week', label: 'Week' }, { id: 'map', label: 'Map' }, { id: 'collage', label: 'Collage' }, { id: 'chat', label: 'Chat' }, { id: 'lens', label: 'Lens' },
   { id: 'todos', label: 'To-dos' }, { id: 'conflicts', label: 'Conflicts', mobile: 'Dupes' },
 ];
 
@@ -24,6 +24,7 @@ export function useCommands() {
     { key: '/week', label: 'Weekly Focus board', run: () => st.go('week') },
     { key: '/map', label: 'Relevance map', run: () => st.go('map') },
     { key: '/collage', label: 'Collage of your writing', run: () => st.go('collage') },
+    { key: '/chat', label: 'Your topics as a group chat', run: () => st.go('chat') },
     { key: '/ambient', label: 'Start ambient mode', run: () => st.set({ query: '', ambient: true }) },
     { key: '/vault', label: st.unlocked ? 'Lock the vault' : 'Unlock the vault', run: () => { st.set({ query: '' }); if (st.unlocked) st.lock(); else st.askPin(); } },
     { key: '/todos', label: 'Open to-dos', run: () => st.go('todos') },

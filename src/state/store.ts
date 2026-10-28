@@ -12,7 +12,7 @@ import { anchor, anchorAll } from '../lib/highlights';
 import { markLocked, markUnlocked, restoreUnlocked, runBeforeLock } from '../lib/vault';
 import wfSample from '../../supabase/weekly_focus_sample.json';
 
-export type View = 'stream' | 'week' | 'map' | 'collage' | 'lens' | 'todos' | 'conflicts' | 'archive';
+export type View = 'stream' | 'week' | 'map' | 'collage' | 'chat' | 'lens' | 'todos' | 'conflicts' | 'archive';
 export interface NewNote {
   id?: string; title: string; body: string; topic: Topic; labels?: string[]; ctx?: string[]; pinned?: boolean; vault?: boolean; archived?: boolean;
   todos?: { text: string; done: boolean }[]; source?: Note['source']; source_file?: string | null; content_hash?: string | null; color?: string | null;
