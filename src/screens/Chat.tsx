@@ -84,7 +84,7 @@ export function Chat() {
           style={{ ...inkBtn, background: 'var(--ac)', color: 'var(--acink)', minHeight: mobile ? 44 : undefined, opacity: AI_READY && talkIds.length >= 2 ? 1 : .45 }}>{talking ? 'Listening in…' : st.talk.length ? '✨ Talk again' : '✨ Let them talk'}</button>
         {st.talk.length > 0 && !talking && <button onClick={() => void st.clearTalk()} style={{ ...ghostBtn, minHeight: mobile ? 44 : undefined }}>Clear AI comments</button>}
       </div>
-      <span style={{ fontSize: 12, color: 'var(--mu)' }}>{AI_READY ? `"Let them talk" sends your latest ${TALK_NOTES} non-vault notes to Claude for a few comments, marked AI and kept on this device.` : NO_AI + '.'}</span>
+      <span style={{ fontSize: 12, color: 'var(--mu)' }}>{AI_READY ? `"Let them talk" sends your latest ${TALK_NOTES} non-vault notes to Claude for a few comments, marked AI and synced to your other devices.` : NO_AI + '.'}</span>
     </div>
     <section aria-label="Chat" style={{ display: 'flex', flexDirection: 'column', maxWidth: 720, width: '100%', margin: mobile ? 0 : '0 auto' }}>
       {earlier > 0 && <button onClick={showEarlier} className="h-ac" style={{ alignSelf: 'center', padding: '6px 14px', minHeight: mobile ? 44 : undefined, border: '1px solid var(--ln)', borderRadius: 999, background: 'transparent', fontSize: 12 }}>Show earlier · {earlier} more</button>}

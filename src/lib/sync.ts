@@ -77,7 +77,7 @@ let channel: RealtimeChannel | null = null;
 export function subscribe(user: string) {
   if (!supabase) return; unsubscribe();
   const ch = supabase.channel('sift-' + user);
-  (['sift_notes', 'sift_todos', 'sift_highlights'] as const).forEach(table => ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: 'user_id=eq.' + user }, p => {
+  (['sift_notes', 'sift_todos', 'sift_highlights', 'sift_chat_comments'] as const).forEach(table => ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: 'user_id=eq.' + user }, p => {
     const deleted = p.eventType === 'DELETE'; handlers?.onRemoteRow(table, (deleted ? p.old : p.new) as Record<string, unknown>, deleted);
   }));
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_focus_entries', filter: 'board_id=eq.' + WF_BOARD }, p => {

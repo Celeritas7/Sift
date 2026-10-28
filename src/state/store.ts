@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CollageSettings, ConflictDismissal, Digest, Highlight, HighlightColor, ImportFile, LayoutKind, LayoutRow, Note, Profile, Settings, Todo, Topic, WfEntry, WfItemPayload, WfMutation } from '../types';
+import type { ChatComment, CollageSettings, ConflictDismissal, Digest, Highlight, HighlightColor, ImportFile, LayoutKind, LayoutRow, Note, Profile, Settings, Todo, Topic, WfEntry, WfItemPayload, WfMutation } from '../types';
 import { db, getMeta, openDb, setMeta, type QueueOp, type SyncTable } from '../lib/db';
 import { cloud, LOCAL_USER, supabase } from '../lib/supabase';
 import { enqueue, fetchAll, fetchWf, flush, pendingCount, setSyncHandlers, subscribe, wireBackgroundFlush } from '../lib/sync';
@@ -50,8 +50,8 @@ interface State {
   /** The Topics editor is open. */
   topicsOpen: boolean;
   aiBusy: Record<string, true>; aiBulk: { done: number; total: number; stop: boolean } | null;
-  /** Chat comments by Claude ("Let them talk"), kept on this device only. */
-  talk: Comment[];
+  /** Chat comments by Claude ("Let them talk"), synced via sift_chat_comments. */
+  talk: ChatComment[];
   view: View; filter: string; query: string; selId: string | null; unlocked: boolean; collage: CollageSettings;
   pin: { open: boolean; mode: 'enter' | 'set'; after: string | null }; toast: Toast | null; importOpen: boolean;
   ambient: boolean; opened: Record<string, true>; sessionNew: Record<string, true>; composerFocused: boolean; sendFor: string | null; sendItem: string | null; map: MapUi; week: string | null;
@@ -128,6 +128,11 @@ export const useStore = create<State>()((set, get) => {
       if (!newer(row as unknown as Note, local)) return;
       set({ notes: { ...get().notes, [id]: row as unknown as Note } }); await db().notes.put(row as unknown as Note);
       if (local && local.body !== row.body) await reanchor(new Set([id]));
+    } else if (table === 'sift_chat_comments') {
+      const id = row.id as string, local = get().talk.find(c => c.id === id);
+      if (deleted) { if (!local) return; set({ talk: get().talk.filter(c => c.id !== id) }); await db().comments.delete(id); return; }
+      if (!newer(row as unknown as ChatComment, local)) return;
+      set({ talk: [...get().talk.filter(c => c.id !== id), row as unknown as ChatComment] }); await db().comments.put(row as unknown as ChatComment);
     } else if (table === 'sift_highlights') {
       const id = row.id as string, local = get().highlights[id];
       if (deleted) { if (!local) return; const { [id]: _, ...rest } = get().highlights; set({ highlights: rest }); await db().highlights.delete(id); return; }
@@ -168,6 +173,7 @@ export const useStore = create<State>()((set, get) => {
         fetchAll<Settings>('sift_settings', user), fetchAll<ConflictDismissal>('sift_conflict_dismissals', user).catch(() => []), fetchAll<ImportFile>('sift_import_files', user),
       ]);
       const hls = await fetchAll<Highlight>('sift_highlights', user).catch(() => null); // null: table not migrated yet, keep the local cache
+      const cms = await fetchAll<ChatComment>('sift_chat_comments', user).catch(() => null);
       const mergeRows = <T extends { id: string; updated_at?: string }>(local: Record<string, T>, remote: T[]) => {
         const out: Record<string, T> = {}; const seen = new Set<string>();
         remote.forEach(r => { seen.add(r.id); out[r.id] = newer(r, local[r.id]) ? r : local[r.id]; });
@@ -176,18 +182,20 @@ export const useStore = create<State>()((set, get) => {
       };
       const st = get();
       const n = mergeRows(st.notes, notes), t = mergeRows(st.todos, todos), hl = hls ? mergeRows(st.highlights, hls) : st.highlights;
+      const cm = cms ? Object.values(mergeRows(byId(st.talk, c => c.id), cms)) : st.talk;
       const seed = collageSeed(settings[0] ? { ...st.settings, ...settings[0] } : st.settings);
       const lay = groupLayout(layout, seed);
       (Object.keys(lay) as LayoutKind[]).forEach(k => Object.entries(st.layout[k]).forEach(([id, p]) => { if (pendingIds.has(id)) lay[k][id] = p; }));
       const layRows = (Object.keys(lay) as LayoutKind[]).flatMap(k => Object.entries(lay[k]).map(([note_id, p]): LayoutRow => ({ user_id: user, note_id, layout: k, seed: isCollage(k) ? seed : 0, ...p })));
-      await db().transaction('rw', [db().notes, db().todos, db().highlights, db().layouts, db().digests, db().dismissals, db().importFiles], async () => {
+      await db().transaction('rw', [db().notes, db().todos, db().highlights, db().comments, db().layouts, db().digests, db().dismissals, db().importFiles], async () => {
         await db().notes.clear(); await db().notes.bulkPut(Object.values(n));
         await db().todos.clear(); await db().todos.bulkPut(Object.values(t));
         await db().highlights.clear(); await db().highlights.bulkPut(Object.values(hl));
+        await db().comments.clear(); await db().comments.bulkPut(cm);
         await db().layouts.clear(); await db().layouts.bulkPut(layRows);
         await db().digests.bulkPut(digests); await db().dismissals.bulkPut(dismissals); await db().importFiles.bulkPut(files);
       });
-      set({ notes: n, todos: t, highlights: hl, layout: lay, digests: { ...st.digests, ...byId(digests, d => d.week_of) },
+      set({ notes: n, todos: t, highlights: hl, talk: cm, layout: lay, digests: { ...st.digests, ...byId(digests, d => d.week_of) },
         dismissed: { ...st.dismissed, ...Object.fromEntries(dismissals.map(d => [pairKey(d.a, d.b), true as const])) },
         settings: settings[0] ? { ...st.settings, ...settings[0] } : st.settings,
         ...(settings[0]?.collage && !collageTimer ? { collage: collageOf(settings[0]) } : {}) });
@@ -209,7 +217,13 @@ export const useStore = create<State>()((set, get) => {
       const d = openDb(user);
       const [notes, todos, highlights, layout, wf, digests, dismissals, settings] = await Promise.all([
         d.notes.toArray(), d.todos.toArray(), d.highlights.toArray(), d.layouts.toArray(), d.wf.toArray(), d.digests.toArray(), d.dismissals.toArray(), getMeta<Settings | null>('settings', null)]);
-      const talk = await getMeta<Comment[]>('talk', []);
+      // Comments used to live only in meta 'talk' (no ids): move them into the synced table once.
+      let legacyTalk: ChatComment[] = [];
+      let talk = await d.comments.toArray(); const legacy = await getMeta<Comment[] | null>('talk', null);
+      if (legacy?.length) {
+        const now = nowIso(), rows = legacy.map((c): ChatComment => ({ id: uid(), user_id: user, note_id: c.note_id, topic: c.topic, text: c.text, created_at: now, updated_at: now }));
+        await d.comments.bulkPut(rows); talk = [...talk, ...rows]; await setMeta('talk', null); legacyTalk = rows;
+      } else if (legacy) await setMeta('talk', null);
       let opened: Record<string, true> = {}; try { opened = JSON.parse(localStorage.getItem('sift-opened-' + user) || '{}'); } catch { /* fresh */ }
       let wfRows = wf;
       if (!cloud && !wfRows.length) { wfRows = (wfSample.rows as { item_key: string; payload: unknown }[]).map(r => ({ board_id: WF_BOARD, item_key: r.item_key, payload: r.payload } as WfEntry)); await d.wf.bulkPut(wfRows); }
@@ -222,6 +236,7 @@ export const useStore = create<State>()((set, get) => {
         digests: byId(digests, x => x.week_of), dismissed: Object.fromEntries(dismissals.map(x => [pairKey(x.a, x.b), true as const])),
         settings: settings ?? DEFAULT_SETTINGS(user), collage: collageOf(settings), opened, pinIsDemo, unlocked: restoreUnlocked(user), talk,
       });
+      if (legacyTalk.length) await persist(legacyTalk.map(c => upsertOp('sift_chat_comments', c)));
       if (!cloud) return;
       setSyncHandlers({
         onRemoteRow: (t, r, del) => void applyRemote(t, r, del),
@@ -292,8 +307,8 @@ export const useStore = create<State>()((set, get) => {
       const { [id]: _, ...notes } = st.notes; const todos = Object.fromEntries(Object.entries(st.todos).filter(([, t]) => t.note_id !== id));
       const layout = NO_LAYOUT(); (Object.keys(layout) as LayoutKind[]).forEach(k => { const { [id]: __, ...rest } = st.layout[k]; layout[k] = rest; });
       const highlights = Object.fromEntries(Object.entries(st.highlights).filter(([, h]) => h.note_id !== id));
-      set({ notes, todos, highlights, layout, selId: st.selId === id ? null : st.selId, toast: st.toast?.id === id ? null : st.toast, map: { ...st.map, placed: st.map.placed === id ? null : st.map.placed, hover: null } });
-      await db().notes.delete(id); await db().todos.where('note_id').equals(id).delete(); await db().highlights.where('note_id').equals(id).delete(); await db().layouts.where('note_id').equals(id).delete();
+      set({ notes, todos, highlights, talk: st.talk.filter(c => c.note_id !== id), layout, selId: st.selId === id ? null : st.selId, toast: st.toast?.id === id ? null : st.toast, map: { ...st.map, placed: st.map.placed === id ? null : st.map.placed, hover: null } });
+      await db().notes.delete(id); await db().todos.where('note_id').equals(id).delete(); await db().highlights.where('note_id').equals(id).delete(); await db().comments.where('note_id').equals(id).delete(); await db().layouts.where('note_id').equals(id).delete();
       if (note.image_path) await db().images.delete(note.image_path);
       await persist([{ kind: 'delete', table: 'sift_notes', match: { id } }]); // todos, highlights, links and layout cascade
       const prefix = `sift:${id}#`;
@@ -371,9 +386,13 @@ export const useStore = create<State>()((set, get) => {
     async letThemTalk(ids) {
       if (get().aiBusy.talk) return 0; set({ aiBusy: { ...get().aiBusy, talk: true } });
       try {
-        const r = await aiTalk(ids); const sent = new Set(ids);
-        const talk = [...get().talk.filter(c => !sent.has(c.note_id)), ...r.comments];
-        set({ talk }); await setMeta('talk', talk); return r.comments.length;
+        const r = await aiTalk(ids); const sent = new Set(ids), now = nowIso();
+        const old = get().talk.filter(c => sent.has(c.note_id));
+        const rows = r.comments.map((c): ChatComment => ({ id: uid(), user_id: get().userId, note_id: c.note_id, topic: c.topic, text: c.text, created_at: now, updated_at: now }));
+        set({ talk: [...get().talk.filter(c => !sent.has(c.note_id)), ...rows] });
+        await db().comments.bulkDelete(old.map(c => c.id)); await db().comments.bulkPut(rows);
+        await persist([...old.map((c): QueueOp => ({ kind: 'delete', table: 'sift_chat_comments', match: { id: c.id } })), ...rows.map(c => upsertOp('sift_chat_comments', c))]);
+        return rows.length;
       } catch (e) { set({ error: (e as Error).message }); return 0; }
       finally { const { talk: _, ...rest } = get().aiBusy; set({ aiBusy: rest }); }
     },
@@ -384,7 +403,10 @@ export const useStore = create<State>()((set, get) => {
       for (const n of Object.values(get().notes)) if (!n.deleted_at && gone.has(n.topic)) { await get().updateNote(n.id, { topic: 'scrap' }); moved++; }
       return moved;
     },
-    async clearTalk() { set({ talk: [] }); await setMeta('talk', []); },
+    async clearTalk() {
+      const old = get().talk; set({ talk: [] }); await db().comments.clear();
+      await persist(old.map((c): QueueOp => ({ kind: 'delete', table: 'sift_chat_comments', match: { id: c.id } })));
+    },
 
     async moveWfSubtask(from, subId, to) {
       const a = get().wf[from], b = get().wf[to]; if (from === to || !a || !b || !isItem(a) || !isItem(b)) return;
