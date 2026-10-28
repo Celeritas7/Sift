@@ -1,4 +1,4 @@
-import { applyTopics, DEFAULT_TOPICS, resolveTopics, slug, TAG_TO_TOPIC, TOPICS, topicColor, topicName } from '../src/lib/config';
+import { applyTopics, DEFAULT_TOPICS, defaultSummary, resolveTopics, slug, TAG_TO_TOPIC, TOPICS, topicColor, topicName } from '../src/lib/config';
 import { initials } from '../src/lib/chat';
 import { parseDraft } from '../src/lib/parse';
 import { checkTopicNames, digestInput } from '../supabase/functions/sift-ai/lib';
@@ -13,7 +13,14 @@ const r = resolveTopics(saved);
 check(r.map(t => t.id).join() === 'eng,u_trv1,u_jp01,u_dup,soft,lang,refl,career,scrap', 'saved order first, then every built-in that was missing; blank names dropped', r.map(t => t.id));
 const eng = r.find(t => t.id === 'eng')!, trv = r.find(t => t.id === 'u_trv1')!, jp = r.find(t => t.id === 'u_jp01')!;
 check(eng.name === 'Office' && eng.hue === 120 && eng.tag === 'office' && !eng.custom && eng.span === 'span 2', 'renamed built-in: new name/colour/tag, keeps its layout');
-check(trv.custom === true && trv.tag === 'travel' && trv.span === 'span 1' && trv.summary === 'Your own topic.', 'custom topic');
+check(trv.custom === true && trv.tag === 'travel' && trv.span === 'span 1' && trv.summary === '', 'custom topic: no description until one is written');
+check(eng.summary === '', 'renamed built-in drops its original description (Office is not "part numbers, change orders")', eng.summary);
+check(resolveTopics([{ id: 'refl', name: 'Reflections', hue: 55 }])[0].summary === DEFAULT_TOPICS[3].summary, 'built-in under its own name keeps its description');
+const desc = resolveTopics([{ id: 'eng', name: 'Office', hue: 120, summary: '  Meetings and admin at the office. ' }, { id: 'u_t', name: 'Travel', hue: 1, summary: 'Trips.' }, { id: 'soft', name: 'Building software', hue: 230, summary: '' }]);
+check(desc[0].summary === 'Meetings and admin at the office.' && desc[1].summary === 'Trips.', 'saved descriptions are used, trimmed', desc.map(t => t.summary));
+check(desc[2].summary === '', 'a cleared built-in description stays cleared', desc[2].summary);
+check(resolveTopics([{ id: 'u_l', name: 'Long', hue: 1, summary: 'x'.repeat(300) }])[0].summary.length === 140, 'descriptions capped at 140 characters');
+check(defaultSummary('eng', 'Engineering at work') === DEFAULT_TOPICS[0].summary && defaultSummary('eng', 'Office') === '' && defaultSummary('u_x', 'X') === '', 'defaultSummary');
 check(jp.tag === 'topic-jp01', 'non-Latin name gets a stable fallback tag', jp.tag);
 check(r.find(t => t.id === 'u_dup')!.tag === 'office-2', 'clashing tags get a number', r.find(t => t.id === 'u_dup')!.tag);
 
