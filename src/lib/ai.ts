@@ -25,5 +25,7 @@ export const aiSummarize = (ids: string[]) => call<{ summaries: Summary[] }>({ a
 /** Notes per "Let them talk" (the function accepts up to 40). */
 export const TALK_NOTES = 40;
 const topicNames = () => Object.fromEntries(TOPICS.map(t => [t.id, t.name]));
-export const aiTalk = (ids: string[]) => call<{ comments: Comment[] }>({ action: 'talk', ids, topics: topicNames() });
+/** Descriptions of the topics the user added, so their voices in "Let them talk" fit what they are about. */
+const topicAbout = () => Object.fromEntries(TOPICS.filter(t => t.custom && t.summary).map(t => [t.id, t.summary]));
+export const aiTalk = (ids: string[]) => call<{ comments: Comment[] }>({ action: 'talk', ids, topics: topicNames(), topic_about: topicAbout() });
 export const aiDigest = (weekOf: string, ids: string[]) => call<{ text: string }>({ action: 'digest', week_of: weekOf, ids, topics: topicNames() });

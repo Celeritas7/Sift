@@ -4,7 +4,7 @@
 // the app saves the results through its normal sync.
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
-import { batches, checkComments, checkSummaries, checkTopicNames, DIGEST_SYSTEM, digestInput, isIdList, isWeekOf, MAX_DIGEST_IDS, MAX_IDS, MAX_TALK_IDS, MODEL, newestThatFit, type NoteRow, SUMMARY_SCHEMA, SUMMARY_SYSTEM, summaryInput, type Summary, TALK_SCHEMA, TALK_SYSTEM, talkInput } from './lib.ts';
+import { batches, checkComments, checkSummaries, checkTopicAbout, checkTopicNames, DIGEST_SYSTEM, digestInput, isIdList, isWeekOf, MAX_DIGEST_IDS, MAX_IDS, MAX_TALK_IDS, MODEL, newestThatFit, type NoteRow, SUMMARY_SCHEMA, SUMMARY_SYSTEM, summaryInput, type Summary, talkers, talkInput, talkSchema, talkSystem } from './lib.ts';
 
 // Secrets are shared by every function in the project: Sift prefers its own key, so other apps' ANTHROPIC_API_KEY is left alone.
 const apiKey = Deno.env.get('SIFT_ANTHROPIC_API_KEY') || Deno.env.get('ANTHROPIC_API_KEY');
@@ -34,7 +34,7 @@ Deno.serve(async req => {
   const role = await sb.from('authentication_mode_user_roles').select('role').eq('auth_user_id', user.id).maybeSingle();
   if (!role.data) return json({ error: 'Your account has no Sift role.' }, 403);
 
-  let body: { action?: string; ids?: unknown; week_of?: unknown; topics?: unknown };
+  let body: { action?: string; ids?: unknown; week_of?: unknown; topics?: unknown; topic_about?: unknown };
   try { body = await req.json(); } catch { return json({ error: 'Bad JSON' }, 400); }
   const max = body.action === 'digest' ? MAX_DIGEST_IDS : body.action === 'talk' ? MAX_TALK_IDS : MAX_IDS;
   if (!isIdList(body.ids, max)) return json({ error: `ids: 1 to ${max} note ids` }, 400);
@@ -64,8 +64,9 @@ Deno.serve(async req => {
       // Career is the vault topic: never sent (the vault filter above already drops it, this is belt and braces).
       const chat = newestThatFit(notes.filter(n => n.topic !== 'career'));
       if (chat.length < 2) return json({ error: 'Need at least two notes for the topics to talk about.' }, 400);
-      const text = await ask(TALK_SYSTEM, talkInput(chat, names), 'medium', TALK_SCHEMA);
-      return json({ comments: checkComments(JSON.parse(text), chat), skipped });
+      const who = talkers(names, checkTopicAbout(body.topic_about)); // the built-ins and the person's own topics, never Career
+      const text = await ask(talkSystem(who), talkInput(chat, names), 'medium', talkSchema(who));
+      return json({ comments: checkComments(JSON.parse(text), chat, who), skipped });
     }
     return json({ error: 'action: summarize, digest or talk' }, 400);
   } catch (e) {
