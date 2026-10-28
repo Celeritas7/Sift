@@ -5,7 +5,7 @@ import { useStore, type NewNote } from '../state/store';
 import { suggestFor, type NoteV } from '../state/derived';
 import { db } from './db';
 import { cloud } from './supabase';
-import { TOPICS } from './config';
+import { topicForLabel } from './config';
 import { todosFromBody } from './parse';
 import type { TrigramIndex } from '../similarity';
 import type { Topic } from '../types';
@@ -36,7 +36,7 @@ const toDataUrl = (bytes: Uint8Array, name: string) => new Promise<string>(res =
 });
 
 function topicFor(p: ParsedNote, index: TrigramIndex, open: NoteV[]): Topic {
-  for (const l of p.labels) { const t = TOPICS.find(x => x.tag === l.toLowerCase() || x.name.toLowerCase() === l.toLowerCase() || l.toLowerCase().startsWith(x.tag)); if (t) return t.id; }
+  for (const l of p.labels) { const t = topicForLabel(l); if (t) return t; }
   const s = suggestFor(index, open, p.title + ' ' + p.body);
   return s.related[0] && s.related[0].sim >= 0.15 ? s.related[0].n.topic : 'scrap';
 }
