@@ -81,7 +81,7 @@ function useVaultRelock() {
   }, [unlocked]);
 }
 
-/** "Write one automatically every Monday": once the week is over, write last week's digest if it has none (once per week per device).
+/** "Write one automatically every Monday": once the week is over, write last week's digest if it has none (once per week per device, retried until it succeeds).
  *  Waits a few seconds after the notes change, so the first sync has landed before it looks. */
 function useAutoDigest() {
   const phase = useStore(s => s.phase), on = useStore(s => s.settings.monday_digest), count = useStore(s => Object.keys(s.notes).length);
@@ -93,8 +93,9 @@ function useAutoDigest() {
       const ids = Object.values(s.notes).filter(n => !n.deleted_at && !n.archived && !n.vault && mondayOf(Date.parse(n.created_at)) === week)
         .sort((a, b) => a.created_at.localeCompare(b.created_at)).map(n => n.id).slice(-120);
       if (!ids.length) return;
-      try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch { return; }
-      void s.writeDigest(week, ids);
+      try { if (localStorage.getItem(key)) return; } catch { return; }
+      // Marked done only once the digest is saved, so a failed attempt (offline, Claude busy) is retried on the next open.
+      void s.writeDigest(week, ids).then(ok => { if (ok) try { localStorage.setItem(key, '1'); } catch { /* storage unavailable */ } });
     }, 4000);
     return () => clearTimeout(t);
   }, [phase, on, count]);
