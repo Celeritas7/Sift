@@ -118,6 +118,12 @@ Type: Newsreader (display/body serif; opsz axis; weights 300/400/500), JetBrains
 Radii: 4 (chips) · 8–10 (rows) · 12–14 (cards) · 18 (panels) · 22–24 (sheets) · 999 (pills). Shadows: popover 0 18px 50px rgba(0,0,0,.14–.16); sheet 0 30px 80px rgba(0,0,0,.3); composer 0 10px 30px rgba(0,0,0,.10) → focused 0 22px 60px rgba(0,0,0,.18).
 Spacing: 4/6/8/10/12/14/16/18/20/22/28/32/36/44/56.
 
+### Chat (topics as a group chat)
+- Nav tab **Chat** (after Collage; `/chat`). Each open note is a message from its topic (avatar = topic colour + 2-letter tag), oldest at top, opening at the newest; 60 at a time with "Show earlier". Day separators (Today / Yesterday / 3 Oct); consecutive notes from one topic within 15 min share one avatar.
+- **Reply**: a note quotes the most similar earlier note from another topic among the previous 25 (trigram cosine ≥ 0.15). Tapping the quote scrolls to it.
+- **Reactions** (no AI): 👍 n other topics use one of its labels · 🔥 n notes with cosine ≥ 0.3 (within 200 notes either side) · 💬 n replies · ✅ all its to-dos done · 📌 pinned.
+- Vault notes appear only while unlocked. Logic: `src/lib/chat.ts`; screen: `src/screens/Chat.tsx`.
+
 ## Phases (agreed)
 1. **Done in prototype** — composer, Map zoom/drag/topic highlight.
 2. Note view: inline edit + save, add/remove labels.

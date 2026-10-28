@@ -19,6 +19,7 @@ import { Stream } from './screens/Stream';
 import { Week } from './screens/Week';
 import { MapView } from './screens/Map';
 import { Collage } from './screens/Collage';
+import { Chat } from './screens/Chat';
 import { Lens } from './screens/Lens';
 import { Todos } from './screens/Todos';
 import { Conflicts } from './screens/Conflicts';
@@ -102,7 +103,7 @@ export function App() {
   if (st.phase === 'boot') return <div style={shell} />;
   if (st.phase === 'signedOut') return <div style={shell}><Login /></div>;
 
-  const Screen = { stream: Stream, week: Week, map: MapView, collage: Collage, lens: Lens, todos: Todos, conflicts: Conflicts, archive: Archive }[st.view];
+  const Screen = { stream: Stream, week: Week, map: MapView, collage: Collage, chat: Chat, lens: Lens, todos: Todos, conflicts: Conflicts, archive: Archive }[st.view];
   return <div data-screen-label="Sift" style={shell}>
     <div style={{ maxWidth: mobile ? 430 : 1240, margin: '0 auto', minHeight: '100dvh', overflowX: 'clip', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <Header />
