@@ -6,6 +6,7 @@ import { LOCAL_USER, supabase } from './lib/supabase';
 import { unsubscribe } from './lib/sync';
 import { SANS } from './lib/config';
 import { useKeyboardInset } from './lib/keyboard';
+import { lastSeen, markSeen, relockDue } from './lib/vault';
 import type { Profile } from './types';
 import { Header, MobileNav } from './components/Header';
 import { Composer } from './components/Composer';
@@ -60,6 +61,22 @@ function useIdleAmbient() {
   }, [pool.length]);
 }
 
+/** Relock the vault after two minutes without input; time with the app in the background counts too. */
+function useVaultRelock() {
+  const unlocked = useStore(s => s.unlocked);
+  useEffect(() => {
+    if (!unlocked) return;
+    let wrote = 0;
+    const act = () => { const now = Date.now(); if (now - wrote > 5000) { wrote = now; markSeen(now); } };
+    const check = () => { const s = useStore.getState(); if (s.unlocked && relockDue(lastSeen(), Date.now())) s.lock(); };
+    const vis = () => { if (document.visibilityState === 'visible') check(); };
+    act(); const evs = ['pointerdown', 'keydown', 'scroll', 'touchstart', 'wheel'];
+    evs.forEach(e => window.addEventListener(e, act, { passive: true, capture: true }));
+    document.addEventListener('visibilitychange', vis); const t = setInterval(check, 5000);
+    return () => { evs.forEach(e => window.removeEventListener(e, act, { capture: true })); document.removeEventListener('visibilitychange', vis); clearInterval(t); };
+  }, [unlocked]);
+}
+
 function useGlobalKeys() {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -73,7 +90,7 @@ function useGlobalKeys() {
 }
 
 export function App() {
-  useBoot(); useGlobalKeys(); useIdleAmbient(); useKeyboardInset();
+  useBoot(); useGlobalKeys(); useIdleAmbient(); useVaultRelock(); useKeyboardInset();
   const st = useStore(); const { c } = usePalette(); const mobile = useIsMobile();
   const vars = { '--bg': c.bg, '--sf': c.sf, '--sf2': c.sf2, '--ink': c.ink, '--mu': c.mu, '--ln': c.ln, '--ac': c.ac, '--acs': c.acs, '--acink': c.acink } as CSSProperties;
   useEffect(() => {

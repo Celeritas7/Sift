@@ -5,6 +5,7 @@ import { MONO, NO_AI, SANS, SERIF, TAG_TO_TOPIC, TOPICS, topicColor, topicName }
 import { fmtLong } from '../lib/format';
 import { saveNoteEdit } from '../lib/edit';
 import { caretHandlers } from '../lib/keyboard';
+import { setBeforeLock } from '../lib/vault';
 import { useImageUrl } from '../hooks/useImageUrl';
 import { NoteChips } from '../screens/Stream';
 import { Check, ghostBtn, inkBtn } from './ui';
@@ -83,6 +84,10 @@ export function NoteSheet() {
   useEffect(() => { const t = bodyRef.current; if (editing && t) { t.focus({ preventScroll: true }); t.setSelectionRange(t.value.length, t.value.length); } }, [editing]);
   // Capture phase, so Esc cancels editing before the app-wide Esc closes the sheet.
   useEffect(() => { if (!editing) return; const f = (e: KeyboardEvent) => keys.current(e); window.addEventListener('keydown', f, true); return () => window.removeEventListener('keydown', f, true); }, [editing]);
+  // Locking closes a vault note; its unsaved edits are saved first rather than dropped.
+  const flushRef = useRef<(() => void) | null>(null);
+  useEffect(() => { setBeforeLock(() => flushRef.current?.()); return () => setBeforeLock(null); }, []);
+  flushRef.current = null;
   if (!n || n.hidden) return null;
   // From Collage the sheet takes the card's colours: rebind the theme variables inside the dialog.
   const L = coll?.look; const ink = L ? L.ink : c.ink, mu = L ? L.mu : c.mu;
@@ -104,6 +109,7 @@ export function NoteSheet() {
     const r = await saveNoteEdit(n.id, title, body);
     if (r) st.showToast({ id: n.id, msg: 'Saved', undo: () => void r.undo() });
   };
+  flushRef.current = dirty && n.vault ? () => void save() : null;
   const saveThen = () => { const then = confirm?.then; void save().then(() => then?.()); };
   keys.current = e => {
     if ((e.target as HTMLElement | null)?.dataset?.labelInput) return; // the label input handles its own Esc / Enter
