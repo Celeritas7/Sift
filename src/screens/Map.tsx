@@ -15,7 +15,7 @@ export function MapView() {
   const idsKey = notes.map(n => n.id + n.topic).join('|');
 
   // Polar seed + 60 relaxation passes (ported exactly), then user positions on top.
-  const base = useMemo(() => layoutMap(notes.map(n => ({ id: n.id, topic: n.topic, ts: n.ts })), TOPICS.map(t => t.id as string)), [idsKey]);
+  const base = useMemo(() => layoutMap(notes.map(n => ({ id: n.id, topic: n.topic, ts: n.ts })), TOPICS.map(t => t.id as string)), [idsKey, TOPICS]);
   const pos = useMemo(() => { const p: Record<string, { x: number; y: number; flip: boolean }> = {};
     Object.entries(base).forEach(([k, v]) => { const o = drag[k] || st.layout.map[k]; p[k] = o ? { ...v, x: o.x, y: o.y } : v; }); return p; }, [base, drag, st.layout.map]);
   posRef.current = pos;

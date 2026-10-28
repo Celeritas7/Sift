@@ -30,6 +30,7 @@ export function useCommands() {
     { key: '/ambient', label: 'Start ambient mode', run: () => st.set({ query: '', ambient: true }) },
     { key: '/vault', label: st.unlocked ? 'Lock the vault' : 'Unlock the vault', run: () => { st.set({ query: '' }); if (st.unlocked) st.lock(); else st.askPin(); } },
     { key: '/todos', label: 'Open to-dos', run: () => st.go('todos') },
+    { key: '/topics', label: 'Add, rename or recolour topics', run: () => st.set({ query: '', topicsOpen: true }) },
     { key: '/import', label: 'Import from Google Takeout', run: () => st.set({ importOpen: true, query: '' }) },
     { key: '/archive', label: 'Archive', run: () => st.go('archive') },
     { key: dark ? '/light' : '/dark', label: 'Switch theme', run: () => { st.set({ query: '' }); void st.setSettings({ theme: dark ? 'light' : 'dark' }); } },

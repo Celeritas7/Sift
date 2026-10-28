@@ -56,9 +56,17 @@ export const DIGEST_SYSTEM = `You write the weekly digest at the top of a person
 
 Write 2 to 4 sentences, at most 80 words, in plain English, addressed to them as "you". Name the main threads and anything that looks unfinished or worth coming back to. Be specific to the notes; no generic encouragement, no lists, no headings, no quotation of whole notes. Reply with the paragraph only.`;
 
-export const digestInput = (weekOf: string, notes: NoteRow[]) =>
+/** The user's topic names by id (custom topics have ids like u_ab12cd). Anything malformed is dropped. */
+export type TopicNames = Record<string, string>;
+export function checkTopicNames(x: unknown): TopicNames {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return {};
+  return Object.fromEntries(Object.entries(x as Record<string, unknown>).filter(([k, v]) => /^[a-z0-9_]{1,12}$/.test(k) && typeof v === 'string' && v.trim() && v.length <= 40).slice(0, 16).map(([k, v]) => [k, (v as string).trim().replace(/["<>]/g, '')]));
+}
+const topicAttr = (id: string, names: TopicNames) => `topic="${id}"` + (names[id] ? ` topic_name="${names[id]}"` : '');
+
+export const digestInput = (weekOf: string, notes: NoteRow[], names: TopicNames = {}) =>
   `The week starting ${weekOf}. ${notes.length} note${notes.length === 1 ? '' : 's'}, oldest first:\n\n` +
-  notes.map(n => `<note date="${n.created_at.slice(0, 10)}" topic="${n.topic}">\n<title>${n.title}</title>\n<body>\n${n.body}\n</body>\n</note>`).join('\n\n');
+  notes.map(n => `<note date="${n.created_at.slice(0, 10)}" ${topicAttr(n.topic, names)}>\n<title>${n.title}</title>\n<body>\n${n.body}\n</body>\n</note>`).join('\n\n');
 
 export const isWeekOf = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 export const isIdList = (x: unknown, max = MAX_IDS): x is string[] => Array.isArray(x) && x.length > 0 && x.length <= max && x.every(i => typeof i === 'string' && /^[0-9a-f-]{36}$/i.test(i));
@@ -94,8 +102,8 @@ export const TALK_SCHEMA = {
   required: ['comments'], additionalProperties: false,
 } as const;
 
-export const talkInput = (notes: NoteRow[]) => 'The chat, oldest first:\n\n' +
-  notes.map(n => `<note id="${n.id}" topic="${n.topic}" date="${n.created_at.slice(0, 10)}">\n<title>${n.title}</title>\n<body>\n${n.body}\n</body>\n</note>`).join('\n\n');
+export const talkInput = (notes: NoteRow[], names: TopicNames = {}) => 'The chat, oldest first:\n\n' +
+  notes.map(n => `<note id="${n.id}" ${topicAttr(n.topic, names)} date="${n.created_at.slice(0, 10)}">\n<title>${n.title}</title>\n<body>\n${n.body}\n</body>\n</note>`).join('\n\n');
 
 /** Keeps the newest notes that fit in `max` characters (whole notes only, never cut). */
 export function newestThatFit<T extends { title: string; body: string }>(notes: T[], max = BATCH_CHARS): T[] {

@@ -1,6 +1,7 @@
 // Client for the sift-ai Supabase function (supabase/functions/sift-ai): note summaries and weekly digests by Claude.
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { TOPICS } from './config';
 import type { Comment, Summary } from '../../supabase/functions/sift-ai/lib';
 export type { Comment };
 
@@ -23,5 +24,6 @@ async function call<T>(body: Record<string, unknown>): Promise<T & { skipped: st
 export const aiSummarize = (ids: string[]) => call<{ summaries: Summary[] }>({ action: 'summarize', ids });
 /** Notes per "Let them talk" (the function accepts up to 40). */
 export const TALK_NOTES = 40;
-export const aiTalk = (ids: string[]) => call<{ comments: Comment[] }>({ action: 'talk', ids });
-export const aiDigest = (weekOf: string, ids: string[]) => call<{ text: string }>({ action: 'digest', week_of: weekOf, ids });
+const topicNames = () => Object.fromEntries(TOPICS.map(t => [t.id, t.name]));
+export const aiTalk = (ids: string[]) => call<{ comments: Comment[] }>({ action: 'talk', ids, topics: topicNames() });
+export const aiDigest = (weekOf: string, ids: string[]) => call<{ text: string }>({ action: 'digest', week_of: weekOf, ids, topics: topicNames() });

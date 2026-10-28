@@ -16,6 +16,7 @@ import { NoteSheet } from './components/NoteSheet';
 import { PinModal } from './components/PinModal';
 import { Ambient } from './components/Ambient';
 import { ImportModal } from './components/ImportModal';
+import { TopicsModal } from './components/TopicsModal';
 import { Login } from './components/Login';
 import { Stream } from './screens/Stream';
 import { Week } from './screens/Week';
@@ -57,7 +58,7 @@ function useIdleAmbient() {
     evs.forEach(e => window.addEventListener(e, act, { passive: true, capture: true }));
     const t = setInterval(() => {
       const s = useStore.getState(); const idle = s.settings.idle_seconds ?? 60;
-      if (s.phase !== 'ready' || s.ambient || idle <= 0 || s.composerFocused || s.pin.open || s.selId || s.importOpen || s.map.dragging || !pool.length) return;
+      if (s.phase !== 'ready' || s.ambient || idle <= 0 || s.composerFocused || s.pin.open || s.selId || s.importOpen || s.topicsOpen || s.map.dragging || !pool.length) return;
       if (Date.now() - last.current > idle * 1000) s.set({ ambient: true });
     }, 1000);
     return () => { evs.forEach(e => window.removeEventListener(e, act, { capture: true })); clearInterval(t); };
@@ -104,7 +105,7 @@ function useGlobalKeys() {
     const k = (e: KeyboardEvent) => {
       const s = useStore.getState(); const tag = (e.target as HTMLElement | null)?.tagName || '';
       if (s.ambient || s.pin.open) return; // those overlays own the keyboard
-      if (e.key === 'Escape') { if (s.importOpen) s.set({ importOpen: false }); else s.set({ selId: null, query: '', sendFor: null }); return; }
+      if (e.key === 'Escape') { if (s.topicsOpen) s.set({ topicsOpen: false }); else if (s.importOpen) s.set({ importOpen: false }); else s.set({ selId: null, query: '', sendFor: null }); return; }
       if ((e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test(tag) && !s.selId && !s.importOpen) { e.preventDefault(); focusComposer(); }
     };
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
@@ -142,6 +143,7 @@ export function App() {
       {st.pin.open && <PinModal />}
       {st.ambient && <Ambient />}
       {st.importOpen && <ImportModal />}
+      {st.topicsOpen && <TopicsModal />}
     </div>
   </div>;
 }

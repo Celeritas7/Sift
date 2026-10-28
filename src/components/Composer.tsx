@@ -163,6 +163,8 @@ export function Composer() {
             style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: mobile ? '6px 11px' : '4px 11px', border: `1px solid ${on ? c.ac : c.ln}`, borderRadius: 999, background: picked ? c.ac : on ? c.acs : c.bg, color: picked ? c.acink : c.ink, fontSize: 12 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: picked ? c.acink : topicColor(tp.id, dark) }} />{tp.name}
             {on && !picked && topicTag && <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--ac)' }}>{topicTag}</span>}</button>; })}
+        <button onPointerDown={e => { e.preventDefault(); st.set({ topicsOpen: true }); }} aria-label="Add or edit topics"
+          style={{ flex: 'none', padding: mobile ? '6px 11px' : '4px 11px', border: '1px dashed var(--ln)', borderRadius: 999, background: 'transparent', color: 'var(--mu)', fontSize: 12 }}>+ Topic</button>
       </div>}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 8px 8px 18px' }}>
         <textarea ref={e => { el.current = e; registerComposer(e); }} value={text} rows={focus ? Math.min(8, Math.max(1, text.split('\n').length)) : 1} aria-label="Write a note"

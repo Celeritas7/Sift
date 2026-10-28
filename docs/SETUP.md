@@ -33,7 +33,7 @@ src/
   screens/   Stream Week Map Collage Lens Todos Conflicts Archive
   components/ Header Composer NoteSheet PinModal Ambient ImportModal Login
 ```
-Search-bar commands: /new /week /map /collage /chat /ambient /vault /todos /import /archive /dark /excerpts /pin /summarize /signout.
+Search-bar commands: /new /week /map /collage /chat /topics /ambient /vault /todos /import /archive /dark /excerpts /pin /summarize /signout.
 
 ## 4. Weekly Focus write rule
 To tick a subtask: read the item row, map `payload.subtasks` replacing the one with matching `id` (`done`, `u: Date.now()`), update the row. To add from Sift: push `{ id:'s_'+rand, t, done:false, u:Date.now(), del:false, when:'', md: topic==='eng'?'o':'p', urg:false, dl:false, loc:'', tag:'', ctx, lat:false, latAt:0, rv:'', src:'sift:<noteId>#<ord>' }`. Store `wf_item_key` + `wf_subtask_id` on `sift_todos`.
